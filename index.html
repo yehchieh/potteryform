@@ -1,0 +1,3472 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>螺旋器型設計工具</title>
+<style>
+:root{
+  --bg:#000000;--surface:#1c1c1e;--surface-2:#2c2c2e;--fill:#3a3a3c;--separator:#38383a;--segment:#5a5a5e;
+  --label:#f5f5f7;--label-secondary:#a1a1a6;--label-tertiary:#636366;
+  --accent:#0071e3;--accent-hover:#0066cc;--accent-ink:#2997ff;--accent-tint:#0a2a4d;--on-accent:#fff;
+  --success:#30d158;--warning:#ff9f0a;--danger:#ff6961;--danger-tint:#3a1614;
+  --viewport:#161617;--material:rgba(28,28,30,0.72);
+  --shadow-sm:0 1px 2px rgba(0,0,0,.5);
+  --shadow-knob:0 .5px 4px rgba(0,0,0,.3),0 3px 8px rgba(0,0,0,.4);
+  --shadow-card:0 0 0 .5px rgba(255,255,255,.06);
+  --shadow-float:0 8px 32px rgba(0,0,0,.55),0 0 0 .5px rgba(255,255,255,.08);
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","Inter","PingFang TC","Noto Sans TC","Helvetica Neue",sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+html{color-scheme:dark;}
+body{display:flex;height:100vh;background:var(--bg);color:var(--label);font-family:var(--font);font-size:13px;overflow:hidden;-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;}
+button,input,label{font-family:inherit;}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px;}
+
+#viewport{flex:1;position:relative;min-width:0;background:var(--viewport);}
+canvas{width:100%;height:100%;display:block;background:var(--viewport);}
+canvas:active{cursor:grabbing;}
+
+#dim-hud,#tip{position:absolute;left:20px;padding:8px 12px;border-radius:10px;background:var(--material);-webkit-backdrop-filter:saturate(180%) blur(20px);backdrop-filter:saturate(180%) blur(20px);box-shadow:var(--shadow-float);color:var(--label);font-size:11.5px;line-height:1.75;user-select:none;pointer-events:none;font-variant-numeric:tabular-nums;}
+#dim-hud{top:20px;}
+#dim-hud:empty{display:none;}
+#tip{bottom:20px;padding:6px 14px;border-radius:999px;color:var(--label-secondary);font-size:11px;}
+
+#panel{width:320px;flex-shrink:0;background:var(--bg);border-left:.5px solid var(--separator);display:flex;flex-direction:column;overflow:hidden;}
+#panel-head{padding:22px 20px 14px;font-weight:600;font-size:22px;line-height:28px;letter-spacing:-.26px;color:var(--label);flex-shrink:0;}
+#panel-body{flex:1;overflow-y:auto;padding:4px 16px 28px;display:flex;flex-direction:column;gap:14px;}
+#panel-body::-webkit-scrollbar{width:6px;}
+#panel-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:3px;}
+#panel-body::-webkit-scrollbar-track{background:transparent;}
+
+.sec{background:var(--surface);border-radius:14px;padding:16px;box-shadow:var(--shadow-card);}
+.sec-title{font-size:15px;font-weight:600;letter-spacing:-.2px;color:var(--label);margin-bottom:14px;}
+
+/* Shape tiles */
+.shape-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.shape-btn{min-height:60px;padding:8px 4px;border-radius:10px;border:0;background:var(--surface-2);color:var(--label);font-size:12px;cursor:pointer;transition:background-color .18s,box-shadow .18s;text-align:center;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;}
+.shape-btn[data-shape="custom"]{flex-direction:row;min-height:44px;gap:8px;}
+.shape-btn svg{color:var(--label-secondary);}
+.shape-btn:hover{background:var(--fill);}
+.shape-btn.active{background:var(--accent-tint);color:var(--accent-ink);font-weight:600;box-shadow:inset 0 0 0 2px var(--accent);}
+.shape-btn.active svg{color:var(--accent-ink);}
+
+/* Slider rows: label + value above a full-width track */
+.srow{display:grid;grid-template-columns:1fr auto;grid-template-areas:"l v" "r r";align-items:baseline;column-gap:8px;row-gap:2px;margin-bottom:12px;}
+.srow:last-child{margin-bottom:0;}
+.srow>.slabel{grid-area:l;}
+.srow>.sval{grid-area:v;}
+.srow>input[type=range]{grid-area:r;}
+.slabel{font-size:12px;color:var(--label-secondary);line-height:16px;}
+.sval{text-align:right;font-size:12px;font-weight:500;color:var(--label);font-variant-numeric:tabular-nums;line-height:16px;}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:20px;margin:0;background:transparent;cursor:pointer;outline-offset:2px;}
+input[type=range]::-webkit-slider-runnable-track{height:4px;border-radius:999px;background:linear-gradient(to right,var(--accent) var(--pct,50%),var(--fill) var(--pct,50%));}
+input[type=range]::-moz-range-track{height:4px;border-radius:999px;background:var(--fill);}
+input[type=range]::-moz-range-progress{height:4px;border-radius:999px;background:var(--accent);}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:20px;height:20px;margin-top:-8px;border-radius:50%;background:#fff;box-shadow:var(--shadow-knob);transition:transform .12s;}
+input[type=range]:active::-webkit-slider-thumb{transform:scale(1.1);}
+input[type=range]::-moz-range-thumb{width:20px;height:20px;border:0;border-radius:50%;background:#fff;box-shadow:var(--shadow-knob);}
+
+/* Switch rows */
+.trow{display:flex;justify-content:space-between;align-items:center;gap:12px;min-height:30px;margin-bottom:8px;}
+.trow:last-child{margin-bottom:0;}
+.trow span{font-size:13px;color:var(--label);}
+.sw{position:relative;width:42px;height:26px;flex-shrink:0;}
+.sw input{opacity:0;width:0;height:0;position:absolute;}
+.sw-track{position:absolute;inset:0;background:var(--fill);border-radius:999px;cursor:pointer;transition:background-color .25s;}
+.sw-track::before{content:'';position:absolute;width:22px;height:22px;left:2px;top:2px;background:#fff;border-radius:50%;box-shadow:var(--shadow-knob);transition:transform .25s cubic-bezier(.3,.7,.4,1);}
+.sw input:checked+.sw-track{background:var(--accent);}
+.sw input:checked+.sw-track::before{transform:translateX(16px);background:#fff;}
+.sw input:focus-visible+.sw-track{outline:3px solid var(--accent);outline-offset:2px;}
+
+/* Segmented controls */
+.mode-row,.dir-row{display:flex;flex-wrap:wrap;gap:2px;padding:2px;margin-bottom:12px;background:var(--surface-2);border-radius:8px;}
+.mode-btn,.dir-btn{flex:1;min-width:0;height:24px;padding:0 6px;border-radius:6px;border:0;background:transparent;color:var(--label);font-size:12px;cursor:pointer;transition:background-color .2s,box-shadow .2s;text-align:center;white-space:nowrap;}
+.mode-btn:hover:not(.active),.dir-btn:hover:not(.active){background:var(--fill);}
+.mode-btn.active,.dir-btn.active{background:var(--segment);box-shadow:var(--shadow-sm);font-weight:600;}
+.profile-btn{flex:1;height:30px;padding:0 8px;border-radius:8px;border:0;background:var(--surface-2);color:var(--label);font-size:12px;cursor:pointer;transition:background-color .18s;text-align:center;}
+.profile-btn:hover{background:var(--fill);}
+
+#hollow-opts{display:none;margin-top:12px;padding-top:12px;border-top:.5px solid var(--separator);}
+#hollow-opts.show{display:block;}
+
+/* Print analysis */
+#print-info{font-size:12px;line-height:1.6;}
+.angle-bar-wrap{background:var(--fill);border-radius:999px;height:6px;margin:8px 0 4px;overflow:hidden;}
+.angle-bar{height:100%;border-radius:999px;transition:width .3s,background .3s;}
+
+/* Buttons */
+.btn{width:100%;min-height:36px;padding:9px 14px;border-radius:10px;border:0;font-size:13px;font-weight:500;cursor:pointer;transition:background-color .18s,transform .12s;margin-bottom:8px;color:var(--label);background:var(--surface-2);}
+.btn:active:not(:disabled){transform:scale(.98);}
+.btn:last-child{margin-bottom:0;}
+.btn-reset,.btn-undo,.btn-load,.btn-save,.btn-export{background:var(--surface-2);color:var(--label);border:0;}
+.btn-reset{flex:1;color:var(--accent-ink);}
+.btn-load{flex:1;font-size:13px;font-weight:500;border-radius:10px;padding:9px;display:flex;align-items:center;justify-content:center;}
+.btn-undo{flex:1;}
+.btn-reset:hover,.btn-undo:hover:not(:disabled),.btn-load:hover,.btn-save:hover,.btn-export:hover{background:var(--fill);}
+.btn-undo:disabled{opacity:.35;cursor:not-allowed;}
+.btn-stl{background:var(--accent);color:#fff;border:0;min-height:44px;border-radius:999px;font-size:15px;font-weight:600;}
+.btn-stl:hover{background:var(--accent-hover);}
+
+/* Mode toggle (螺旋 / 平面簍空) as a segmented control */
+.mode-toggle{display:flex;gap:2px;padding:2px;background:var(--surface);border-radius:9px;}
+.mode-toggle .btn{min-height:28px;padding:4px!important;border:0!important;border-radius:7px;font-size:13px!important;}
+.mode-toggle .btn[style*="rgb(90, 90, 94)"]{box-shadow:var(--shadow-sm);font-weight:600;}
+
+/* Mesh warning */
+#mesh-warn{display:none;position:absolute;bottom:64px;left:20px;right:20px;max-width:440px;background:var(--danger-tint);border:0;border-radius:12px;box-shadow:var(--shadow-float);padding:14px 16px;color:var(--label);font-size:13px;line-height:1.55;z-index:20;max-height:55%;overflow-y:auto;pointer-events:auto;}
+#mesh-warn .wt{font-weight:600;font-size:15px;letter-spacing:-.2px;margin-bottom:6px;color:var(--danger);}
+#mesh-warn .wi{margin-bottom:2px;}
+#mesh-warn .wh{color:var(--label-secondary);font-size:12px;margin-top:8px;padding-top:8px;border-top:.5px solid var(--separator);line-height:1.7;}
+#mesh-warn .wh b{color:var(--label);}
+#mesh-warn-reset{margin-top:10px;height:28px;padding:0 12px;border-radius:8px;border:0;background:var(--surface-2);color:var(--danger);font-size:12px;font-weight:500;cursor:pointer;pointer-events:auto;}
+#mesh-warn-reset:hover{background:#4a1c1a;}
+
+/* Colour */
+.color-row{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+.color-row .slabel{width:40px;}
+input[type=color]{width:30px;height:24px;background:none;padding:0;cursor:pointer;border-radius:6px;border:.5px solid var(--separator);}
+input[type=color]::-webkit-color-swatch-wrapper{padding:2px;}
+input[type=color]::-webkit-color-swatch{border:0;border-radius:4px;}
+
+.color-row input[type=range]{flex:1;}
+/* Lexicon (器型語彙 / 紋理語彙) */
+.lex-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px;}
+.lex-btn{padding:6px 4px 8px;border-radius:10px;border:0;background:var(--surface-2);color:var(--label);cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:4px;transition:background-color .18s,box-shadow .18s;font-family:inherit;min-width:0;}
+.lex-btn canvas{width:100%;height:auto;border-radius:6px;display:block;}
+.lex-btn .lx-name{font-size:12px;font-weight:600;line-height:1.25;}
+.lex-btn .lx-sub{font-size:10px;color:var(--label-secondary);line-height:1.2;white-space:nowrap;max-width:100%;overflow:hidden;text-overflow:ellipsis;}
+.lex-btn:hover{background:var(--fill);}
+.lex-btn.active{background:var(--accent-tint);color:var(--accent-ink);box-shadow:inset 0 0 0 2px var(--accent);}
+.lex-btn.active .lx-sub{color:var(--accent-ink);}
+.lex-note{font-size:11px;color:var(--label-secondary);line-height:1.55;}
+</style>
+</head>
+<body>
+
+<div id="viewport">
+  <canvas id="c"></canvas>
+  <div id="dim-hud"></div>
+  <div id="tip">拖曳旋轉 · 滾輪縮放</div>
+  <div id="mesh-warn">
+    <div class="wt">⚠ 模型無法正確顯示</div>
+    <div id="mesh-warn-issues"></div>
+    <div class="wh" id="mesh-warn-hints"></div>
+    <button id="mesh-warn-reset" onclick="resetCameraAndRegen()">↺ 重設相機並重新生成</button>
+  </div>
+</div>
+
+<div id="panel">
+  <div id="panel-head">螺旋器型設計工具</div>
+  <div id="panel-body">
+
+    <!-- MODE TOGGLE -->
+    <div class="mode-toggle">
+      <button id="spiralModeBtn" class="btn" style="flex:1;margin:0;background:rgb(90, 90, 94);color:#f5f5f7;">螺旋</button>
+      <button id="flatModeBtn" class="btn" style="flex:1;margin:0;background:transparent;color:#a1a1a6;">平面簍空</button>
+    </div>
+
+    <div id="spiral-panel" style="display:flex;flex-direction:column;gap:10px;">
+
+    <!-- FORM LEXICON -->
+    <div class="sec">
+      <div class="sec-title">器型語彙 · 一鍵基礎器型</div>
+      <div class="lex-grid" id="formGrid"></div>
+      <div class="lex-note">點選即載入基礎器型（自訂輪廓＋中空壁厚），之後可拖曳輪廓控制點、改高度與壁厚。已套用的紋理會保留。</div>
+    </div>
+
+    <!-- TEXTURE LEXICON -->
+    <div class="sec">
+      <div class="sec-title">紋理語彙 · 現成表面紋理</div>
+      <div class="lex-grid" id="texGrid"></div>
+      <div id="tex-opts" style="display:none;padding-top:8px;border-top:1px solid #38383a;">
+        <div class="srow"><span class="slabel">紋理深度</span><input type="range" id="texAmp" min="-10" max="10" value="1.5" step="0.1"><span class="sval" id="v-texAmp">+1.5 mm</span></div>
+        <div style="font-size:11px;color:#a1a1a6;margin-top:-3px;margin-bottom:5px;">正值＝浮雕凸起 &nbsp;·&nbsp; 負值＝刻印凹入</div>
+        <div class="srow"><span class="slabel">紋理尺度</span><input type="range" id="texScale" min="2" max="150" value="12" step="0.5"><span class="sval" id="v-texScale">12.0 mm</span></div>
+        <div class="srow"><span class="slabel" id="lbl-texRough">自然變化</span><input type="range" id="texRough" min="0" max="100" value="40" step="1"><span class="sval" id="v-texRough">40%</span></div>
+        <div class="srow"><span class="slabel" id="lbl-texAngle">方向傾斜</span><input type="range" id="texAngle" min="-90" max="90" value="0" step="5"><span class="sval" id="v-texAngle">0°</span></div>
+        <div class="srow" id="texSeed-row"><span class="slabel">隨機種子</span><input type="range" id="texSeed" min="1" max="999" value="7" step="1"><span class="sval" id="v-texSeed">7</span></div>
+        <div id="tex-custom-opts" style="display:none;">
+          <div class="trow" style="margin-top:4px;"><span style="font-size:12px;">反轉明暗（白色凸起）</span><label class="sw"><input type="checkbox" id="texInvert"><span class="sw-track"></span></label></div>
+          <div class="trow"><span style="font-size:12px;">交錯排列（磚砌式）</span><label class="sw"><input type="checkbox" id="texStagger"><span class="sw-track"></span></label></div>
+          <div style="display:flex;gap:5px;margin-top:4px;align-items:center;">
+            <button class="profile-btn" id="ctReplaceBtn">↻ 更換圖檔</button>
+            <span id="ctName" style="font-size:11px;color:#a1a1a6;flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></span>
+          </div>
+        </div>
+        <input type="file" id="ctFile" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" style="display:none;">
+        <div style="display:flex;gap:5px;margin-top:6px;">
+          <button class="profile-btn" id="texRerollBtn">🎲 換一組變化</button>
+          <button class="profile-btn" id="texClearBtn">✕ 移除紋理</button>
+        </div>
+        <div class="lex-note" style="margin-top:7px;">尺度＝單一紋樣的大約尺寸（mm）。方向傾斜作用於水波紋、繩紋、火痕。紋理也受下方「紋理強度包絡」控制，例如讓火痕只留在下半部。</div>
+      </div>
+    </div>
+
+    <!-- SHAPE -->
+    <div class="sec">
+      <div class="sec-title">基礎形狀</div>
+      <div class="shape-grid" style="margin-bottom:10px;">
+        <button class="shape-btn active" data-shape="cone">
+          <svg width="26" height="20"><polygon points="13,2 24,18 2,18" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>直錐
+        </button>
+        <button class="shape-btn" data-shape="vcone">
+          <svg width="26" height="20"><path d="M13 2 Q23 11 22 18 H4 Q3 11 13 2Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>弧錐
+        </button>
+        <button class="shape-btn" data-shape="cylinder">
+          <svg width="26" height="20"><rect x="3" y="2" width="20" height="16" rx="1" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>直筒
+        </button>
+        <button class="shape-btn" data-shape="bowl">
+          <svg width="26" height="20"><path d="M3 2 Q5 18 13 18 Q21 18 23 2" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>碗形
+        </button>
+        <button class="shape-btn" data-shape="custom" style="grid-column:span 2;">
+          <svg width="26" height="20"><path d="M8 18 Q1 10 8 2 H18 Q25 10 18 18Z" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"/></svg>自訂輪廓（曲線控制點）
+        </button>
+      </div>
+      <div class="srow">
+        <span class="slabel">頂部半徑</span>
+        <input type="range" id="topR" min="5" max="150" value="45" step="1">
+        <span class="sval" id="v-topR">45 mm</span>
+      </div>
+      <div class="srow">
+        <span class="slabel">底部半徑</span>
+        <input type="range" id="botR" min="0" max="80" value="5" step="1">
+        <span class="sval" id="v-botR">5 mm</span>
+      </div>
+      <div style="font-size:11px;color:#a1a1a6;margin-top:-3px;margin-bottom:5px;">
+        半徑 = 直徑 ÷ 2 &nbsp;·&nbsp; 例：直徑90mm → 輸入45
+      </div>
+      <button id="flipVBtn" style="width:100%;margin-bottom:6px;padding:6px 0;background:#2c2c2e;border:1px solid #38383a;border-radius:6px;color:#f5f5f7;font-size:12px;cursor:pointer;" title="上下翻轉（同時交換頂/底半徑、包絡曲線、輪廓曲線）">⇅ 上下翻轉模型</button>
+      <!-- Custom profile editor -->
+      <div id="custom-opts" style="display:none;padding-top:8px;border-top:1px solid #38383a;margin-top:4px;">
+        <div style="font-size:11px;color:#a1a1a6;margin-bottom:5px;">拖曳控制點：左右＝半徑，上下＝高度位置 · 雙擊刪除中間點</div>
+        <canvas id="profileCvs" width="240" height="190" style="width:100%;border-radius:6px;cursor:crosshair;display:block;background:#161617;border:1px solid #38383a;"></canvas>
+        <div style="display:flex;gap:5px;margin-top:6px;">
+          <button id="addPtBtn" class="profile-btn">＋ 新增控制點</button>
+          <button id="clearPtsBtn" class="profile-btn">清除中間點</button>
+        </div>
+      </div>
+      <div class="srow"><span class="slabel">高度</span><input type="range" id="hgt" min="10" max="250" value="120" step="1"><span class="sval" id="v-hgt">120 mm</span></div>
+      <div class="srow" id="slabW-row" style="display:none;"><span class="slabel">磚寬度</span><input type="range" id="slabW" min="20" max="300" value="150" step="1"><span class="sval" id="v-slabW">150 mm</span></div>
+      <div class="srow"><span class="slabel">展開角度</span><input type="range" id="arcSpan" min="30" max="360" value="360" step="5"><span class="sval" id="v-arcSpan">360°</span></div>
+      <div style="font-size:11px;color:#a1a1a6;margin-top:-3px;margin-bottom:5px;">360°＝完整迴轉體 &nbsp;·&nbsp; 小於 360°＝瓦片般的開放弧面（自動以壁厚成形）</div>
+      <div style="height:1px;background:#38383a;margin:8px 0;"></div>
+      <div class="srow">
+        <span class="slabel" style="color:#2997ff;">側壁角度</span>
+        <input type="range" id="coneAngle" min="0" max="80" value="18" step="1">
+        <span class="sval" id="v-coneAngle" style="color:#2997ff;">18°</span>
+      </div>
+      <div style="font-size:11px;color:#a1a1a6;margin-top:-2px;margin-bottom:2px;">
+        改角度→自動算頂部半徑 &nbsp;·&nbsp; 直筒=0°<br>
+        V60的「60°」= 兩壁夾角，此處要輸入 <b style="color:#2997ff;">30°</b>（從垂直量到側壁）
+      </div>
+    </div>
+
+    <!-- HOLLOW -->
+    <div class="sec">
+      <div class="sec-title">實心 / 中空</div>
+      <div class="trow">
+        <span>中空（薄壁）</span>
+        <label class="sw"><input type="checkbox" id="hollow"><span class="sw-track"></span></label>
+      </div>
+      <div id="hollow-opts">
+        <div class="srow"><span class="slabel">壁厚</span><input type="range" id="wallT" min="0.5" max="15" value="3" step="0.5"><span class="sval" id="v-wallT">3.0 mm</span></div>
+        <div style="font-size:11px;color:#a1a1a6;margin-top:4px;">FDM列印最小壁厚建議 ≥ 1.2mm</div>
+        <div style="height:1px;background:#38383a;margin:8px 0;"></div>
+        <div class="trow">
+          <span>底部封閉<span style="font-size:11px;color:#a1a1a6;margin-left:4px;">（花瓶 / 容器）</span></span>
+          <label class="sw"><input type="checkbox" id="sealBot"><span class="sw-track"></span></label>
+        </div>
+        <div style="font-size:11px;color:#a1a1a6;margin-top:-3px;">關閉 = 底部開口（如濾杯）；開啟 = 底部補平實心</div>
+      </div>
+    </div>
+
+    <!-- SPIRAL -->
+    <div class="sec">
+      <div class="sec-title">主螺旋</div>
+      <div class="srow"><span class="slabel">螺旋條數</span><input type="range" id="numRibs" min="0" max="24" value="12" step="1"><span class="sval" id="v-numRibs">12 條</span></div>
+      <div class="srow"><span class="slabel">旋轉幅度</span><input type="range" id="twist" min="0" max="720" value="540" step="15"><span class="sval" id="v-twist">540°</span></div>
+      <div class="srow"><span class="slabel">凹凸深度</span><input type="range" id="ribH" min="-20" max="20" value="3" step="0.5"><span class="sval" id="v-ribH">+3.0 mm</span></div>
+      <div style="font-size:11px;color:#a1a1a6;margin-top:-3px;margin-bottom:5px;">正值＝凸起 &nbsp;·&nbsp; 負值＝凹槽</div>
+      <div class="srow"><span class="slabel">突起寬度</span><input type="range" id="ribS" min="1" max="12" value="2" step="0.5"><span class="sval" id="v-ribS">2</span></div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:5px;margin-top:6px;">脊型</div>
+      <div class="mode-row" id="ribProfileRow" style="margin-bottom:8px;">
+        <button class="mode-btn active" data-rp="0">圓弧</button>
+        <button class="mode-btn" data-rp="1">銳脊</button>
+      </div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:5px;">旋轉方向</div>
+      <div class="dir-row">
+        <button class="dir-btn active" id="dirCW">↻ 順時針</button>
+        <button class="dir-btn" id="dirCCW">↺ 逆時針</button>
+      </div>
+    </div>
+
+    <!-- SECONDARY SPIRAL -->
+    <div class="sec">
+      <div class="sec-title">副螺旋線段</div>
+      <div class="trow">
+        <span>啟用副螺旋</span>
+        <label class="sw"><input type="checkbox" id="rib2"><span class="sw-track"></span></label>
+      </div>
+      <div id="rib2-opts" style="display:none;margin-top:8px;padding-top:8px;border-top:1px solid #38383a;">
+        <div style="font-size:11px;color:#a1a1a6;margin-bottom:7px;">位於主螺旋之間，可調整長短與凹凸</div>
+        <div class="srow"><span class="slabel">凹凸深度</span><input type="range" id="rib2H" min="-10" max="10" value="1.5" step="0.5"><span class="sval" id="v-rib2H">+1.5 mm</span></div>
+        <div style="font-size:11px;color:#a1a1a6;margin-top:-3px;margin-bottom:6px;">正值＝凸起 &nbsp;·&nbsp; 負值＝凹槽</div>
+        <div class="srow"><span class="slabel">線段長度</span><input type="range" id="rib2Len" min="5" max="100" value="50" step="5"><span class="sval" id="v-rib2Len">60 mm</span></div>
+        <div style="font-size:11px;color:#a1a1a6;margin-bottom:5px;margin-top:6px;">從哪端開始計算</div>
+        <div class="dir-row" id="rib2-dir-row">
+          <button class="dir-btn active" id="rib2DirBot">↑ 從下緣</button>
+          <button class="dir-btn" id="rib2DirTop">↓ 從上緣</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- VERTICAL LINES -->
+    <div class="sec">
+      <div class="sec-title">垂直線條</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">與螺旋疊加，方向固定不旋轉；條數、深度可與螺旋獨立調整</div>
+      <div class="srow"><span class="slabel">線條數</span><input type="range" id="numVert" min="0" max="36" value="0" step="1"><span class="sval" id="v-numVert">0 條</span></div>
+      <div class="srow"><span class="slabel">凹凸深度</span><input type="range" id="vertH" min="-40" max="40" value="2" step="0.5"><span class="sval" id="v-vertH">+2.0 mm</span></div>
+      <div style="font-size:11px;color:#a1a1a6;margin-top:-3px;margin-bottom:5px;">正值＝凸起 &nbsp;·&nbsp; 負值＝凹槽</div>
+      <div class="srow"><span class="slabel">線條寬度</span><input type="range" id="vertS" min="1" max="12" value="2" step="0.5"><span class="sval" id="v-vertS">2</span></div>
+    </div>
+
+    <!-- HORIZONTAL LINES -->
+    <div class="sec">
+      <div class="sec-title">水平線條</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">沿高度方向週期性凹凸，與螺旋疊加；條數、深度可獨立調整</div>
+      <div class="srow"><span class="slabel">線條數</span><input type="range" id="numHoriz" min="0" max="24" value="0" step="1"><span class="sval" id="v-numHoriz">0 條</span></div>
+      <div class="srow"><span class="slabel">凹凸深度</span><input type="range" id="horizH" min="-40" max="40" value="2" step="0.5"><span class="sval" id="v-horizH">+2.0 mm</span></div>
+      <div style="font-size:11px;color:#a1a1a6;margin-top:-3px;margin-bottom:5px;">正值＝凸起 &nbsp;·&nbsp; 負值＝凹槽</div>
+      <div class="srow"><span class="slabel">線條寬度</span><input type="range" id="horizS" min="1" max="12" value="2" step="0.5"><span class="sval" id="v-horizS">2</span></div>
+    </div>
+
+    <!-- CROSS-SECTION LOBES -->
+    <div class="sec">
+      <div class="sec-title">截面波瓣</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">讓截面由圓形變成星形或多邊形；振幅 0＝圓形截面。適合製作 (E) 星形折面：波瓣數 5～6、深度 ±15mm</div>
+      <div class="srow"><span class="slabel">波瓣數</span><input type="range" id="lobeN" min="0" max="12" value="0" step="1"><span class="sval" id="v-lobeN">0</span></div>
+      <div class="srow"><span class="slabel">波瓣深度</span><input type="range" id="lobeAmp" min="-30" max="30" value="0" step="0.5"><span class="sval" id="v-lobeAmp">0 mm</span></div>
+      <div class="srow"><span class="slabel">波瓣扭轉</span><input type="range" id="lobeTwist" min="-180" max="180" value="0" step="5"><span class="sval" id="v-lobeTwist">0°</span></div>
+    </div>
+
+    <!-- STACKED RINGS -->
+    <div class="sec">
+      <div class="sec-title">環形堆疊</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">沿高度方向週期性膨脹，形成環環相疊的造型。適合製作 (D) 疊繞堆積：層數 4～6、幅度 10～20mm，搭配自訂輪廓＝肚形</div>
+      <div class="srow"><span class="slabel">堆疊層數</span><input type="range" id="stackN" min="0" max="12" value="0" step="1"><span class="sval" id="v-stackN">0</span></div>
+      <div class="srow"><span class="slabel">波動幅度</span><input type="range" id="stackAmp" min="-30" max="30" value="8" step="0.5"><span class="sval" id="v-stackAmp">+8.0 mm</span></div>
+      <div class="srow"><span class="slabel">層間錯位</span><input type="range" id="stackOffset" min="0" max="30" value="0" step="0.5"><span class="sval" id="v-stackOffset">0 mm</span></div>
+    </div>
+
+    <!-- AXIS BEND -->
+    <div class="sec">
+      <div class="sec-title">軸線側彎</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">整個器身的中心軸做 S 型橫移，形成流體感扭曲（F 非對稱流體）。彎曲幅度 15～30mm 搭配頻率 0.5 (弓形) 或 1 (S形)。</div>
+      <div class="srow"><span class="slabel">彎曲幅度</span><input type="range" id="axisBend" min="0" max="50" value="0" step="1"><span class="sval" id="v-axisBend">0 mm</span></div>
+      <div class="srow"><span class="slabel">彎曲頻率</span><input type="range" id="axisBendFreq" min="0.25" max="2" value="1" step="0.25"><span class="sval" id="v-axisBendFreq">1.0×</span></div>
+      <div class="srow"><span class="slabel">彎曲方向</span><input type="range" id="axisBendPhase" min="0" max="360" value="0" step="5"><span class="sval" id="v-axisBendPhase">0°</span></div>
+      <div class="srow"><span class="slabel">方向旋轉</span><input type="range" id="axisTwist" min="-360" max="360" value="0" step="10"><span class="sval" id="v-axisTwist">0°</span></div>
+      <div class="srow"><span class="slabel">凸側膨脹</span><input type="range" id="axisBulge" min="0" max="40" value="0" step="1"><span class="sval" id="v-axisBulge">0 mm</span></div>
+    </div>
+
+    <!-- TEXTURE ENVELOPE CURVE -->
+    <div class="sec">
+      <div class="sec-title">紋理強度包絡</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:7px;">曲線控制所有表面紋理的強度隨高度的變化；左=0×（無紋理），右=2×（雙倍），上=頂部，下=底部。拖動控制點調整曲線，點擊「加點」加入轉折。</div>
+      <canvas id="envCvs" width="240" height="140" style="width:100%;border-radius:6px;cursor:crosshair;display:block;"></canvas>
+      <div style="display:flex;gap:5px;margin-top:6px;">
+        <button class="profile-btn" id="addEnvPtBtn">+ 加點</button>
+        <button class="profile-btn" id="clearEnvBtn">↺ 重設為1×</button>
+      </div>
+    </div>
+
+    <!-- ORGANIC CRUMPLE -->
+    <div class="sec">
+      <div class="sec-title">有機皺摺</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">在表面疊加多頻率噪波，模擬有機皺紋；振幅為 0 時關閉</div>
+      <div class="srow"><span class="slabel">皺摺振幅</span><input type="range" id="crumple" min="0" max="30" value="0" step="0.5"><span class="sval" id="v-crumple">0 mm</span></div>
+      <div class="srow"><span class="slabel">環繞頻率</span><input type="range" id="crumpleFreqA" min="1" max="16" value="6" step="1"><span class="sval" id="v-crumpleFreqA">6</span></div>
+      <div class="srow"><span class="slabel">縱向頻率</span><input type="range" id="crumpleFreqV" min="0" max="12" value="3" step="0.5"><span class="sval" id="v-crumpleFreqV">3</span></div>
+      <div class="srow"><span class="slabel">扭轉角度</span><input type="range" id="crumpleTwist" min="0" max="720" value="90" step="5"><span class="sval" id="v-crumpleTwist">90°</span></div>
+      <div class="srow"><span class="slabel">細節層次</span><input type="range" id="crumpleOct" min="1" max="4" value="2" step="1"><span class="sval" id="v-crumpleOct">2</span></div>
+    </div>
+
+    <!-- HEX BUMP PATTERN -->
+    <div class="sec">
+      <div class="sec-title">凸起紋樣</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">規則蜂巢或隨機分布凸起／凹壓；正值＝外凸，負值＝凹壓；可搭配包絡曲線控制區域分佈</div>
+      <div class="srow"><span class="slabel">凸起高度</span><input type="range" id="bumpH" min="-15" max="15" value="0" step="0.5"><span class="sval" id="v-bumpH">0 mm</span></div>
+      <!-- Regular grid controls -->
+      <div id="bump-grid-opts">
+        <div class="mode-row" id="bumpOrientRow" style="margin-bottom:8px;">
+          <button class="mode-btn active" data-orient="0">水平</button>
+          <button class="mode-btn" data-orient="1">垂直</button>
+          <button class="mode-btn" data-orient="2">交叉</button>
+        </div>
+        <div class="srow"><span class="slabel">環繞格數</span><input type="range" id="bumpFreqA" min="1" max="32" value="8" step="1"><span class="sval" id="v-bumpFreqA">8</span></div>
+        <div class="srow"><span class="slabel">縱向格數</span><input type="range" id="bumpFreqV" min="1" max="24" value="5" step="1"><span class="sval" id="v-bumpFreqV">5</span></div>
+      </div>
+      <div class="srow"><span class="slabel">邊緣銳利度</span><input type="range" id="bumpS" min="1" max="12" value="3" step="0.5"><span class="sval" id="v-bumpS">3</span></div>
+      <!-- Random toggle -->
+      <div class="trow" style="margin-top:8px;border-top:1px solid #38383a;padding-top:8px;">
+        <span style="font-size:11px;color:#a1a1a6;">隨機排列</span>
+        <label class="sw"><input type="checkbox" id="bumpRandom"><span class="sw-track"></span></label>
+      </div>
+      <!-- Random mode controls -->
+      <div id="bump-rand-opts" style="display:none;">
+        <div class="srow"><span class="slabel">數量</span><input type="range" id="bumpCount" min="5" max="300" value="60" step="1"><span class="sval" id="v-bumpCount">60</span></div>
+        <div class="srow"><span class="slabel">隨機種子</span><input type="range" id="bumpSeed" min="1" max="999" value="42" step="1"><span class="sval" id="v-bumpSeed">42</span></div>
+        <div style="display:flex;gap:5px;margin-top:5px;">
+          <button class="profile-btn" id="bumpRerollBtn">🎲 重新隨機</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- CUSTOM DISPLACEMENT MAP -->
+    <div class="sec">
+      <div class="sec-title">自訂圖案貼皮</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:9px;">上傳 SVG 或圖片作為位移貼圖；白色＝外凸，黑色＝內凹，灰色＝平坦</div>
+
+      <!-- Upload button + thumbnail -->
+      <div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:9px;">
+        <label style="flex:1;padding:7px 4px;border-radius:5px;border:1px dashed #38383a;background:#2c2c2e;color:#2997ff;font-size:11px;cursor:pointer;text-align:center;display:block;">
+          ＋ 上傳圖案
+          <input type="file" id="dispFileInput" accept=".svg,image/svg+xml,image/png,image/jpeg,image/webp" style="display:none;">
+        </label>
+        <button class="profile-btn" id="dispClearBtn" style="display:none;flex:0 0 auto;padding:7px 10px;">✕ 清除</button>
+      </div>
+      <div id="dispThumb" style="display:none;width:100%;height:70px;border-radius:6px;background:#38383a center/contain no-repeat;margin-bottom:9px;border:1px solid #38383a;"></div>
+
+      <div class="srow"><span class="slabel">凹凸高度</span><input type="range" id="dispH" min="-20" max="20" value="0" step="0.5" disabled><span class="sval" id="v-dispH">0 mm</span></div>
+      <div class="srow"><span class="slabel">橫向平鋪</span><input type="range" id="dispTileX" min="1" max="12" value="1" step="1"><span class="sval" id="v-dispTileX">×1</span></div>
+      <div class="srow"><span class="slabel">縱向平鋪</span><input type="range" id="dispTileV" min="1" max="12" value="1" step="1"><span class="sval" id="v-dispTileV">×1</span></div>
+      <div class="trow" style="margin-top:4px;">
+        <span style="font-size:11px;color:#a1a1a6;">反轉明暗（黑凸白凹）</span>
+        <label class="sw"><input type="checkbox" id="dispInvert"><span class="sw-track"></span></label>
+      </div>
+      <div class="trow">
+        <span style="font-size:11px;color:#a1a1a6;">受包絡曲線影響</span>
+        <label class="sw"><input type="checkbox" id="dispEnv" checked><span class="sw-track"></span></label>
+      </div>
+    </div>
+
+    <!-- PROFILE BULGE -->
+    <div class="sec">
+      <div class="sec-title">輪廓膨脹</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">在輪廓曲線上疊加一個鐘形突起；正值＝外鼓，負值＝內縮（腰身）</div>
+      <div class="srow"><span class="slabel">膨脹量</span><input type="range" id="bulge" min="-50" max="50" value="0" step="1"><span class="sval" id="v-bulge">0 mm</span></div>
+      <div class="srow"><span class="slabel">峰值位置</span><input type="range" id="bulgePos" min="0" max="1" value="0.5" step="0.01"><span class="sval" id="v-bulgePos">50%</span></div>
+    </div>
+
+    <!-- RIM CHAMFER -->
+    <div class="sec">
+      <div class="sec-title">R 角導角</div>
+      <div style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">在頂部或底部邊緣加入導圓角，避免銳利直角；適合陶瓷列印與流暢造型</div>
+      <div class="srow"><span class="slabel">導角半徑</span><input type="range" id="rimR" min="0" max="30" value="0" step="0.5"><span class="sval" id="v-rimR">0 mm</span></div>
+      <div class="trow" style="margin-top:4px;">
+        <span style="font-size:11px;color:#a1a1a6;">套用於底部</span>
+        <label class="sw"><input type="checkbox" id="rimRBot" checked><span class="sw-track"></span></label>
+      </div>
+      <div class="trow">
+        <span style="font-size:11px;color:#a1a1a6;">套用於頂部</span>
+        <label class="sw"><input type="checkbox" id="rimRTop" checked><span class="sw-track"></span></label>
+      </div>
+    </div>
+
+    <!-- PRINT ANALYSIS -->
+    <div class="sec">
+      <div class="sec-title">3D 列印分析</div>
+      <div id="print-info">載入模型後顯示</div>
+    </div>
+
+    <!-- DISPLAY -->
+    <div class="sec">
+      <div class="sec-title">顯示</div>
+      <div class="mode-row">
+        <button class="mode-btn active" data-mode="0">實體</button>
+        <button class="mode-btn" data-mode="1">線框</button>
+        <button class="mode-btn" data-mode="2">實體+線框</button>
+      </div>
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;color:#a1a1a6;font-weight:600;margin-bottom:5px;">視角預設</div>
+        <div class="mode-row" id="view-presets" style="flex-wrap:wrap;gap:4px;">
+          <button class="mode-btn view-btn" data-theta="0.4" data-phi="1.05">斜視</button>
+          <button class="mode-btn view-btn" data-theta="0" data-phi="0.08">頂視</button>
+          <button class="mode-btn view-btn" data-theta="0" data-phi="3.06">底視</button>
+          <button class="mode-btn view-btn" data-theta="0" data-phi="1.5708">正視</button>
+          <button class="mode-btn view-btn" data-theta="1.5708" data-phi="1.5708">側視</button>
+          <button class="mode-btn view-btn" data-theta="0.7854" data-phi="0.7854">斜前</button>
+        </div>
+        <div style="font-size:11px;color:#a1a1a6;margin-top:5px;">拖曳旋轉 · 滾輪縮放 · 雙指觸控</div>
+      </div>
+      <!-- Mesh quality -->
+      <div style="margin-bottom:8px;">
+        <div style="font-size:11px;color:#a1a1a6;font-weight:600;margin-bottom:5px;">網格精細度</div>
+        <div class="mode-row" id="meshQ-row">
+          <button class="mode-btn meshq-btn" data-q="1">草稿</button>
+          <button class="mode-btn meshq-btn active" data-q="2">中等</button>
+          <button class="mode-btn meshq-btn" data-q="3">精細</button>
+          <button class="mode-btn meshq-btn" data-q="4">超精</button>
+        </div>
+        <div style="font-size:11px;color:#a1a1a6;margin-top:3px;" id="meshQ-hint">128×72 頂點（適合一般預覽）</div>
+      </div>
+      <div class="trow" style="margin-bottom:8px;">
+        <span style="font-size:12px;color:#a1a1a6;">平滑預覽（隱藏紋樣）</span>
+        <label class="sw"><input type="checkbox" id="smoothToggle"><span class="sw-track"></span></label>
+      </div>
+      <div id="smooth-hint" style="display:none;font-size:11px;color:#2997ff;margin-top:-4px;margin-bottom:8px;background:#0a2a4d;border-radius:5px;padding:5px 8px;border:1px solid #38383a;">暫時隱藏螺旋紋樣，模擬列印後整體輪廓</div>
+      <div class="color-row">
+        <span class="slabel">顏色</span>
+        <input type="color" id="baseCol" value="#c5a882">
+        <input type="range" id="grad" min="0" max="100" value="30">
+        <span class="sval" id="v-grad">30%</span>
+      </div>
+      <div class="srow"><span class="slabel">光源角度</span><input type="range" id="lightA" min="0" max="360" value="40" step="5"><span class="sval" id="v-lightA">40°</span></div>
+      <div class="srow"><span class="slabel">光源強度</span><input type="range" id="lightI" min="0" max="100" value="75"><span class="sval" id="v-lightI">75%</span></div>
+    </div>
+
+    <!-- ACTIONS -->
+    <div class="sec">
+      <div class="sec-title">操作</div>
+      <button class="btn btn-save" id="saveBtn">儲存截圖 + 參數</button>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <label class="btn btn-load" style="margin-bottom:0;cursor:pointer;text-align:center;">
+          ↑ 載入參數<input type="file" id="loadFile" accept=".json" style="display:none;">
+        </label>
+        <button class="btn btn-reset" style="margin-bottom:0;" id="resetBtn">↺ 預設值</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:6px;">
+        <button class="btn btn-undo" id="undoBtn" style="margin-bottom:0;" disabled>↩ 復原</button>
+        <button class="btn btn-undo" id="redoBtn" style="margin-bottom:0;" disabled>↪ 重做</button>
+      </div>
+      <button class="btn btn-export" id="exportBtn">↓ 匯出 .obj 檔案</button>
+      <button class="btn btn-stl" id="stlBtn">↓ 匯出 .stl 檔案</button>
+      <div id="save-toast" style="display:none;margin-top:6px;font-size:11px;color:#30d158;text-align:center;background:#0f2a17;border-radius:5px;padding:5px 8px;border:1px solid #38383a;">✓ 已儲存！</div>
+    </div>
+    </div><!-- /spiral-panel -->
+
+    <!-- FLAT PANEL MODE -->
+    <div id="flat-panel" style="display:none;flex-direction:column;gap:10px;">
+
+      <!-- SVG Upload -->
+      <div class="sec">
+        <div class="sec-title">線稿輸入</div>
+        <div style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">上傳 SVG 線稿，深色區域＝實心材料；簍空部分留白</div>
+        <label class="btn btn-load" style="cursor:pointer;display:block;text-align:center;margin-bottom:0;">
+          ↑ 載入 SVG 線稿<input type="file" id="svgFile" accept=".svg,image/svg+xml" style="display:none;">
+        </label>
+        <canvas id="svgPreview" width="240" height="120" style="width:100%;border-radius:6px;margin-top:8px;border:1px solid #38383a;display:none;background:#161617;"></canvas>
+        <div id="svgInfo" style="font-size:11px;color:#a1a1a6;margin-top:5px;display:none;"></div>
+        <div class="trow" style="margin-top:8px;">
+          <span>反轉（白色為實心）</span>
+          <label class="sw"><input type="checkbox" id="svgInvert"><span class="sw-track"></span></label>
+        </div>
+      </div>
+
+      <!-- Dimensions -->
+      <div class="sec">
+        <div class="sec-title">尺寸</div>
+        <div class="srow"><span class="slabel">寬度</span><input type="range" id="flatW" min="20" max="300" value="100" step="1"><span class="sval" id="v-flatW">100 mm</span></div>
+        <div class="srow"><span class="slabel">高度</span><input type="range" id="flatH" min="20" max="300" value="100" step="1"><span class="sval" id="v-flatH">100 mm</span></div>
+        <div class="srow"><span class="slabel">厚度</span><input type="range" id="flatThick" min="1" max="30" value="5" step="0.5"><span class="sval" id="v-flatThick">5.0 mm</span></div>
+        <div style="font-size:11px;color:#a1a1a6;margin-top:-2px;">厚度＝列印高度方向</div>
+        <div style="height:1px;background:#38383a;margin:8px 0;"></div>
+        <div class="srow"><span class="slabel">網格精度</span><input type="range" id="flatRes" min="60" max="400" value="180" step="20"><span class="sval" id="v-flatRes">180</span></div>
+        <div style="font-size:11px;color:#a1a1a6;margin-top:-2px;">精度越高細節越好，但匯出檔案越大</div>
+      </div>
+
+      <!-- Flat Export -->
+      <div class="sec">
+        <div class="sec-title">匯出</div>
+        <div id="flat-no-svg" style="font-size:11px;color:#a1a1a6;margin-bottom:8px;">請先載入 SVG 線稿</div>
+        <button class="btn btn-export" id="flatExportOBJ" style="display:none;">↓ 匯出 .obj 檔案</button>
+        <button class="btn btn-stl" id="flatExportSTL" style="display:none;margin-top:6px;">↓ 匯出 .stl 檔案</button>
+      </div>
+
+    </div><!-- /flat-panel -->
+
+  </div>
+</div>
+
+<script>
+'use strict';
+
+// ══════════════════════════════════
+// MATH
+// ══════════════════════════════════
+function lerp(a,b,t){return a+(b-a)*t;}
+function clamp(v,a,b){return Math.max(a,Math.min(b,v));}
+function smoothstep(t){return t*t*(3-2*t);}
+
+function perspMat(fov,asp,n,f){
+  const t=1/Math.tan(fov*Math.PI/360),nf=1/(n-f);
+  return new Float32Array([t/asp,0,0,0, 0,t,0,0, 0,0,(f+n)*nf,-1, 0,0,2*f*n*nf,0]);
+}
+function lookAt(e,c,u){
+  let fx=c[0]-e[0],fy=c[1]-e[1],fz=c[2]-e[2];
+  let l=Math.sqrt(fx*fx+fy*fy+fz*fz);fx/=l;fy/=l;fz/=l;
+  let sx=fy*u[2]-fz*u[1],sy=fz*u[0]-fx*u[2],sz=fx*u[1]-fy*u[0];
+  l=Math.sqrt(sx*sx+sy*sy+sz*sz);sx/=l;sy/=l;sz/=l;
+  const ux=sy*fz-sz*fy,uy=sz*fx-sx*fz,uz=sx*fy-sy*fx;
+  return new Float32Array([sx,ux,-fx,0,sy,uy,-fy,0,sz,uz,-fz,0,
+    -(sx*e[0]+sy*e[1]+sz*e[2]),-(ux*e[0]+uy*e[1]+uz*e[2]),fx*e[0]+fy*e[1]+fz*e[2],1]);
+}
+function mul4(a,b){
+  const r=new Float32Array(16);
+  for(let i=0;i<4;i++)for(let j=0;j<4;j++){let s=0;for(let k=0;k<4;k++)s+=a[i+k*4]*b[k+j*4];r[i+j*4]=s;}
+  return r;
+}
+
+// ══════════════════════════════════
+// PARAMETERS
+// ══════════════════════════════════
+const DEF = {
+  shape:'cone', topR:45, botR:5, h:120, coneAngle:18,
+  hollow:false, wallT:3, sealBot:false,
+  numRibs:12, twist:540, ribH:3, ribS:2, cw:true,
+  rib2:false, rib2H:1.5, rib2Len:50, rib2FromTop:false,
+  numVert:0, vertH:2.0, vertS:2,
+  numHoriz:0, horizH:2.0, horizS:2,
+  // Organic crumple noise
+  crumple:0, crumpleFreqA:6, crumpleFreqV:3, crumpleTwist:90, crumpleOct:2,
+  // Profile bulge
+  bulge:0, bulgePos:0.5,
+  // Hex bump pattern
+  bumpH:0, bumpFreqA:8, bumpFreqV:5, bumpS:3,
+  bumpOrient:0,  // 0=水平hex, 1=垂直hex, 2=交叉方格
+  bumpRandom:false, bumpCount:60, bumpSeed:42,
+  // Cross-section lobes (星形截面)
+  lobeN:0, lobeAmp:0, lobeTwist:0,
+  // Stacked rings (環形堆疊)
+  stackN:0, stackAmp:8, stackOffset:0,
+  // Axis lateral bend (軸線側彎, S形流體)
+  axisBend:0, axisBendFreq:1, axisBendPhase:0, axisTwist:0, axisBulge:0,
+  // Rib profile: 0=smooth, 1=sharp
+  ribProfile:0,
+  // Edge chamfer / R corner
+  rimR:0, rimRBot:true, rimRTop:true,
+  // Custom displacement map (SVG / image)
+  dispH:0, dispTileX:1, dispTileV:1, dispInvert:false, dispEnv:true,
+  // Open arc (瓦片): sweep angle in degrees; 360 = full revolution
+  arcSpan:360,
+  // Flat slab tile (平板磚): width in mm; thickness = wallT
+  slabW:150,
+  // Texture lexicon (紋理語彙)
+  texType:'none', texAmp:1.5, texScale:12, texRough:0.4, texAngle:0, texSeed:7,
+  texInvert:false, texStagger:false,
+  mode:0, baseCol:[0.773,0.659,0.51], gradAmt:0.3,
+  lightA:40, lightI:0.75
+};
+// Custom profile points — kept separate because they need deep-copy
+const DEF_PROFILE=[{v:0,r:5},{v:1,r:45}];
+const DEF_ENV=[{v:0,m:1},{v:1,m:1}];
+function cloneProfile(pts){return pts.map(p=>({...p}));}
+function cloneEnv(pts){return pts.map(p=>({...p}));}
+
+// ── Cone angle helpers ──
+function angleFromDims(){
+  return Math.round(Math.atan2(Math.max(0,P.topR-P.botR),P.h)*180/Math.PI);
+}
+function topRFromAngle(deg){
+  return Math.max(P.botR, Math.min(180, Math.round(P.botR+P.h*Math.tan(deg*Math.PI/180))));
+}
+const P = {...DEF, baseCol:[...DEF.baseCol], profilePts:cloneProfile(DEF_PROFILE), envPts:cloneEnv(DEF_ENV)};
+
+// Mesh quality — controlled by meshQ slider (1=low,2=med,3=high,4=ultra)
+let SEG_A=128, SEG_H=72;
+function setMeshQuality(q){
+  // q: 1=draft(64×36), 2=medium(128×72), 3=high(192×108), 4=ultra(256×144)
+  const qa=[64,128,192,256],qh=[36,72,108,144];
+  SEG_A=qa[(q|0)-1]||128; SEG_H=qh[(q|0)-1]||72;
+}
+
+// ══════════════════════════════════
+// SHAPE & RIB FUNCTIONS
+// ══════════════════════════════════
+// ── Catmull-Rom spline interpolation through profile control points ──
+function catmullRomR(v,pts){
+  const n=pts.length;
+  if(n===0)return 0;
+  if(n===1)return Math.max(0,pts[0].r||0);
+  if(v<=pts[0].v)return Math.max(0,pts[0].r||0);
+  if(v>=pts[n-1].v)return Math.max(0,pts[n-1].r||0);
+  // Find segment: pts[seg-1].v <= v < pts[seg].v
+  let seg=1;
+  while(seg<n-1&&pts[seg].v<=v)seg++;
+  const i0=Math.max(0,seg-2),i1=seg-1,i2=seg,i3=Math.min(n-1,seg+1);
+  const p0=pts[i0],p1=pts[i1],p2=pts[i2],p3=pts[i3];
+  // Guard all r values against NaN/undefined before arithmetic
+  const r0=isFinite(p0.r)?p0.r:0, r1=isFinite(p1.r)?p1.r:0;
+  const r2=isFinite(p2.r)?p2.r:0, r3=isFinite(p3.r)?p3.r:0;
+  const dv=p2.v-p1.v;
+  if(dv<=0)return Math.max(0,(r1+r2)/2); // degenerate segment – fallback
+  const t=(v-p1.v)/dv;
+  const t2=t*t,t3=t2*t;
+  const cr=0.5*(
+    2*r1+
+    (-r0+r2)*t+
+    (2*r0-5*r1+4*r2-r3)*t2+
+    (-r0+3*r1-3*r2+r3)*t3
+  );
+  // Fall back to linear interpolation if Catmull-Rom produces NaN or a
+  // negative overshoot that would collapse the ring to zero radius.
+  if(!isFinite(cr)||cr<0) return Math.max(0,r1+(r2-r1)*t);
+  return cr;
+}
+
+function getR(v){
+  const{topR,botR,shape}=P;
+  let r;
+  if(shape==='cylinder')r=(topR+botR)/2;
+  else if(shape==='vcone')r=lerp(botR,topR,smoothstep(v));
+  else if(shape==='bowl')r=botR+(topR-botR)*Math.sin(v*Math.PI/2);
+  else if(shape==='custom'||shape==='belly')r=catmullRomR(v,P.profilePts);
+  else r=lerp(botR,topR,v); // cone
+  // Profile bulge: Gaussian bell curve centred at bulgePos
+  const{bulge,bulgePos}=P;
+  if(bulge!==0){
+    const d=v-bulgePos;
+    const bell=Math.exp(-12*d*d); // narrow-ish bell; 12 = sharpness
+    r+=bulge*bell;
+  }
+  return r;
+}
+function getR_inner(v){return Math.max(0.5, getR(v)-P.wallT);}
+
+function ribDisp(theta,v){
+  const{numRibs,twist,ribH,ribS,cw,ribProfile}=P;
+  if(numRibs===0||ribH===0)return 0;
+  const dir=cw?-1:1;
+  const phase=numRibs*theta+dir*(twist/360)*2*Math.PI*v;
+  if(ribProfile===1){
+    // Sharp tent wave: linear falloff from rib centre → V-ridge profile
+    const n=((phase%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
+    const halfN=n<=Math.PI?n/Math.PI:(2*Math.PI-n)/Math.PI;
+    return ribH*Math.pow(Math.max(0,1-halfN),Math.max(0.5,ribS));
+  }
+  return ribH*Math.pow((1+Math.cos(phase))/2,ribS);
+}
+function rib2Disp(theta,v){
+  const{numRibs,twist,rib2,rib2H,rib2Len,ribS,cw,rib2FromTop}=P;
+  if(!rib2||numRibs===0||rib2H===0)return 0;
+  const span=rib2Len/100;
+  const vLocal=rib2FromTop?(1-v):v;
+  if(vLocal>=span)return 0;
+  const fadeZone=Math.min(0.08,span*0.25);
+  const fade=vLocal<span-fadeZone?1:Math.max(0,(span-vLocal)/fadeZone);
+  const dir=cw?-1:1;
+  const phase=numRibs*theta+dir*(twist/360)*2*Math.PI*v+Math.PI;
+  return rib2H*Math.pow((1+Math.cos(phase))/2,ribS)*fade;
+}
+// Cross-section lobes: modulate radius azimuthally → star / polygon cross-section
+function lobeDisp(theta,v){
+  const{lobeN,lobeAmp,lobeTwist}=P;
+  if(!lobeN||!lobeAmp)return 0;
+  // Optional twist: rotate lobe pattern along height
+  const tw=lobeTwist*Math.PI/180*(1-v);
+  return lobeAmp*Math.cos(lobeN*(theta+tw));
+}
+// Stacked rings: modulate radius vertically → torus segments stacked on top of each other
+// stackOffset adds single-lobe lateral shift alternating per layer → "stacked pebbles" effect
+function stackDisp(theta,v){
+  const{stackN,stackAmp,stackOffset}=P;
+  if(!stackN||(!stackAmp&&!stackOffset))return 0;
+  const phase=stackN*2*Math.PI*v;
+  const radial=stackAmp*Math.cos(phase);
+  const lateral=stackOffset*Math.cos(theta)*Math.sin(phase);
+  return radial+lateral;
+}
+function vertDisp(theta){
+  // Vertical lines: fixed theta pattern, no twist, no v dependence
+  const{numVert,vertH,vertS}=P;
+  if(numVert===0||vertH===0)return 0;
+  const phase=numVert*theta;
+  return vertH*Math.pow((1+Math.cos(phase))/2,vertS);
+}
+function horizDisp(v){
+  // Horizontal lines: periodic in height direction, no theta dependence
+  const{numHoriz,horizH,horizS}=P;
+  if(numHoriz===0||horizH===0)return 0;
+  const phase=numHoriz*v*Math.PI*2;
+  return horizH*Math.pow((1+Math.cos(phase))/2,horizS);
+}
+// Texture envelope: Catmull-Rom on {v, m} points
+function catmullRomEnv(v,pts){
+  if(!pts||pts.length<2)return 1;
+  if(v<=pts[0].v)return pts[0].m;
+  if(v>=pts[pts.length-1].v)return pts[pts.length-1].m;
+  let i=1;while(i<pts.length-1&&pts[i].v<v)i++;
+  const p1=pts[i-1],p2=pts[i];
+  const p0=pts[Math.max(0,i-2)],p3=pts[Math.min(pts.length-1,i+1)];
+  const dv=p2.v-p1.v;if(dv<=0)return(p1.m+p2.m)/2;
+  const t=(v-p1.v)/dv,t2=t*t,t3=t2*t;
+  const cm=0.5*(2*p1.m+(-p0.m+p2.m)*t+(2*p0.m-5*p1.m+4*p2.m-p3.m)*t2+(-p0.m+3*p1.m-3*p2.m+p3.m)*t3);
+  return Math.max(0,isFinite(cm)?cm:p1.m+(p2.m-p1.m)*t);
+}
+function getEnvMultiplier(v){return catmullRomEnv(v,P.envPts);}
+
+// ── Seeded LCG RNG (Park-Miller) ──
+function lcgRand(seed){
+  // Returns a closure that yields floats in [0,1)
+  let s=(seed|0)||1;
+  return()=>{s=(s*16807+0)%2147483647;return(s-1)/2147483646;};
+}
+
+// Pre-computed random bump centers [{t, v}] in normalised coords
+let bumpCenters=[];
+function rebuildBumpCenters(){
+  const rng=lcgRand(P.bumpSeed);
+  bumpCenters=[];
+  for(let i=0;i<P.bumpCount;i++){
+    bumpCenters.push({t:rng()*Math.PI*2, v:rng()});
+  }
+}
+
+// Helper: distance^2 in hex-grid space (horizontal rows, alternating column offset)
+function _hexHoriz(u,w){
+  const row=Math.round(w);
+  const uOff=(row&1)*0.5;
+  const du=u+uOff-Math.round(u+uOff);
+  const dw=w-row;
+  return du*du+dw*dw*1.3;
+}
+// Helper: distance^2 in hex-grid space (vertical columns, alternating row offset)
+function _hexVert(u,w){
+  const col=Math.round(u);
+  const wOff=(col&1)*0.5;
+  const dw=w+wOff-Math.round(w+wOff);
+  const du=u-col;
+  return du*du*1.3+dw*dw;
+}
+
+// Hexagonal bump pattern (regular grid) or random placement
+function bumpDisp(theta,v){
+  const{bumpH,bumpFreqA,bumpFreqV,bumpS,bumpOrient,bumpRandom}=P;
+  if(bumpH===0)return 0;
+  if(bumpRandom){
+    // Find closest random centre with angular wrap-around
+    let best=Infinity;
+    const scaleA=bumpFreqA/(2*Math.PI);
+    const scaleV=bumpFreqV;
+    for(let i=0;i<bumpCenters.length;i++){
+      let dt=theta-bumpCenters[i].t;
+      dt=dt-Math.round(dt/(2*Math.PI))*Math.PI*2;
+      const da=dt*scaleA;
+      const dv=(v-bumpCenters[i].v)*scaleV;
+      const d2=da*da+dv*dv*1.3;
+      if(d2<best)best=d2;
+    }
+    const shape=Math.pow(Math.max(0,1-best*4.5),bumpS);
+    return bumpH*shape;
+  }
+  // Regular grid — three orientations
+  const u=theta/(2*Math.PI)*bumpFreqA;
+  const w=v*bumpFreqV;
+  let d2;
+  if(bumpOrient===1){
+    // Vertical hex columns
+    d2=_hexVert(u,w);
+  } else if(bumpOrient===2){
+    // Both: square grid (no hex offset — bumps at every grid intersection)
+    const du=u-Math.round(u);
+    const dw=w-Math.round(w);
+    d2=du*du+dw*dw;
+  } else {
+    // Horizontal hex rows (default)
+    d2=_hexHoriz(u,w);
+  }
+  const shape=Math.pow(Math.max(0,1-d2*4.5),bumpS);
+  return bumpH*shape;
+}
+
+// Organic crumple: multi-octave sinusoidal noise (fBm-style)
+function crumpleDisp(theta,v){
+  const{crumple,crumpleFreqA,crumpleFreqV,crumpleTwist,crumpleOct}=P;
+  if(crumple===0)return 0;
+  const twistRad=(crumpleTwist/360)*2*Math.PI;
+  let d=0, amp=1, freq=1, wt=0;
+  for(let oct=0;oct<crumpleOct;oct++){
+    const ph1=crumpleFreqA*freq*theta + crumpleFreqV*freq*v*Math.PI*2 + twistRad*v*freq;
+    const ph2=crumpleFreqA*freq*1.618*theta - crumpleFreqV*freq*1.314*v*Math.PI*2 + twistRad*v*freq*0.79+1.73;
+    d+=amp*(Math.sin(ph1)+0.5*Math.sin(ph2));
+    wt+=amp*1.5;
+    amp*=0.5; freq*=2;
+  }
+  return crumple*(d/wt); // normalise so max ≈ crumple mm
+}
+
+// ── Custom displacement map ──────────────────────────────────────────
+let _dispPixels=null, _dispW=0, _dispH=0;
+
+function loadDispMap(file){
+  const url=URL.createObjectURL(file);
+  const img=new Image();
+  img.onload=()=>{
+    const SIZE=512; // internal resolution
+    const oc=document.createElement('canvas');
+    const aspect=img.naturalWidth/img.naturalHeight||1;
+    oc.width=SIZE; oc.height=Math.round(SIZE/aspect)||SIZE;
+    const ctx=oc.getContext('2d');
+    ctx.drawImage(img,0,0,oc.width,oc.height);
+    const id=ctx.getImageData(0,0,oc.width,oc.height);
+    _dispPixels=id.data; _dispW=oc.width; _dispH=oc.height;
+    URL.revokeObjectURL(url);
+    // show thumbnail
+    const thumb=document.getElementById('dispThumb');
+    thumb.style.backgroundImage=`url(${oc.toDataURL()})`;
+    thumb.style.display='block';
+    document.getElementById('dispClearBtn').style.display='inline-block';
+    document.getElementById('dispH').disabled=false;
+    schedRegen();
+  };
+  img.onerror=()=>{alert('無法載入圖片');URL.revokeObjectURL(url);};
+  img.src=url;
+}
+
+function _sampleDisp(u,v){
+  // u,v in [0,1], bilinear interpolation
+  const px=((u%1+1)%1)*(_dispW-1);
+  const py=((1-((v%1+1)%1)))*(_dispH-1); // flip V
+  const x0=px|0, y0=py|0;
+  const x1=Math.min(x0+1,_dispW-1), y1=Math.min(y0+1,_dispH-1);
+  const fx=px-x0, fy=py-y0;
+  function luma(x,y){
+    const i=(y*_dispW+x)*4;
+    return(_dispPixels[i]*0.299+_dispPixels[i+1]*0.587+_dispPixels[i+2]*0.114)/255;
+  }
+  const l=luma(x0,y0)*(1-fx)*(1-fy)+luma(x1,y0)*fx*(1-fy)+
+          luma(x0,y1)*(1-fx)*fy   +luma(x1,y1)*fx*fy;
+  return l;
+}
+
+function dispMapDisp(theta,v){
+  const{dispH,dispTileX,dispTileV,dispInvert}=P;
+  if(!_dispPixels||dispH===0)return 0;
+  const u=(theta/(2*Math.PI))*dispTileX;
+  const vt=v*dispTileV;
+  let luma=_sampleDisp(u,vt);
+  if(dispInvert)luma=1-luma;
+  // white=raised(+), black=depressed(-), 50%grey=flat
+  return dispH*(luma*2-1);
+}
+
+// ══════════════════════════════════
+// TEXTURE LEXICON 紋理語彙
+// ══════════════════════════════════
+// Every texture is sampled in real millimetres on a reference cylinder
+// (radius texRefR) so feature size is independent of the vessel's profile,
+// and it wraps seamlessly around the circumference.
+function _h3(x,y,z,s){
+  let h=Math.imul(x|0,0x27d4eb2d)^Math.imul(y|0,0x165667b1)^Math.imul(z|0,0x5bd1e995)^Math.imul(s|0,0x85ebca6b);
+  h=Math.imul(h^(h>>>15),0x2c1b3c6d);
+  h=Math.imul(h^(h>>>12),0x297a2d39);
+  h^=h>>>15;
+  return (h>>>0)/4294967295;
+}
+function vnoise3(x,y,z,s){
+  const xi=Math.floor(x),yi=Math.floor(y),zi=Math.floor(z);
+  const xf=x-xi,yf=y-yi,zf=z-zi;
+  const u=xf*xf*(3-2*xf),v=yf*yf*(3-2*yf),w=zf*zf*(3-2*zf);
+  const c000=_h3(xi,yi,zi,s),c100=_h3(xi+1,yi,zi,s),c010=_h3(xi,yi+1,zi,s),c110=_h3(xi+1,yi+1,zi,s);
+  const c001=_h3(xi,yi,zi+1,s),c101=_h3(xi+1,yi,zi+1,s),c011=_h3(xi,yi+1,zi+1,s),c111=_h3(xi+1,yi+1,zi+1,s);
+  const x00=c000+(c100-c000)*u,x10=c010+(c110-c010)*u,x01=c001+(c101-c001)*u,x11=c011+(c111-c011)*u;
+  const y0=x00+(x10-x00)*v,y1=x01+(x11-x01)*v;
+  return y0+(y1-y0)*w;
+}
+function fbm3(x,y,z,oct,s){
+  let a=0.5,f=1,sum=0,n=0;
+  for(let o=0;o<oct;o++){sum+=a*vnoise3(x*f+o*7.13,y*f+o*3.7,z*f,s+o*101);n+=a;a*=0.5;f*=2.03;}
+  return sum/n;
+}
+function frac(x){return x-Math.floor(x);}
+function sstep(a,b,x){const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t);}
+
+// Returns 0..1 (1 = fully raised feature). theta in radians, y in mm,
+// vf = 0..1 height fraction, R0 = reference radius (mm), p = {s,r,a,seed}
+function texSample(type,theta,y,vf,R0,p){
+  if(!type||type==='none')return 0;
+  const C=2*Math.PI*R0, s=Math.max(0.5,p.s), r=p.r, a=p.a, sd=p.seed|0;
+  const T=theta/(2*Math.PI);
+  const nx=R0*Math.cos(theta), nz=R0*Math.sin(theta);
+  const N=(sc,oct,off)=>fbm3(nx/sc,y/sc,nz/sc,oct,sd+(off||0));
+  switch(type){
+    case 'rush':{ // 藺草紋 — basket weave of round rush strands
+      let n=Math.max(2,Math.round(C/s)); if(n&1)n++;
+      const cs=C/n, bu=T*n, bv=y/cs;
+      const bx=Math.floor(bu), by=Math.floor(bv), fu=bu-bx, fv=bv-by;
+      const horiz=((bx+by)&1)===0;
+      const t=horiz?fv:fu, along=horiz?fu:fv;
+      let v=Math.sqrt(Math.abs(Math.sin(Math.PI*t*3)));         // three strands per block
+      v*=0.5+0.5*Math.sqrt(Math.sin(Math.PI*along));             // dip under the crossing strands
+      const fib=horiz?fbm3(nx/(s*0.8),y/(s*0.07),nz/(s*0.8),2,sd)
+                     :fbm3(nx/(s*0.07),y/(s*0.8),nz/(s*0.07),2,sd);
+      return clamp(v*(1-r*0.6+r*1.2*fib),0,1);
+    }
+    case 'mountain':{ // 山紋 — ridged ranges + layered far mountains (披麻皴 feel)
+      const st=2.4, oct=2+Math.round(r*3);
+      let sum=0,amp=0.5,f=1,norm=0;
+      for(let o=0;o<oct;o++){
+        const n=vnoise3(nx*f/(s*st),y*f/s,nz*f/(s*st),sd+o*31);
+        const rid=1-Math.abs(2*n-1);
+        sum+=amp*rid*rid;norm+=amp;amp*=0.5;f*=2.1;
+      }
+      const ridged=sum/norm;
+      const band=frac(y/(s*1.3)+N(s*3,2,7)*1.2);
+      const layer=Math.pow(1-band,1.6);
+      return clamp(ridged*0.65+layer*0.35,0,1);
+    }
+    case 'water':{ // 水波紋 — flowing waves with domain warp
+      const k=Math.round(C*Math.sin(a)/s), m=Math.cos(a)/s;
+      const warp=(N(s*2.5,3,3)-0.5)*Math.PI*2*(0.4+1.6*r);
+      const ph=2*Math.PI*(k*T+y*m)+warp;
+      const w1=Math.pow((1+Math.sin(ph))/2,1.8);
+      const w2=(1+Math.sin(ph*2.3+warp*1.7))/2;
+      return clamp((w1+0.25*w2)/1.25,0,1);
+    }
+    case 'fire':{ // 火痕 — flame tongues licking up from the foot + scorch crackle
+      const th=theta+y*Math.tan(clamp(a,-1.2,1.2))/R0;
+      const fx=R0*Math.cos(th), fz=R0*Math.sin(th);
+      const wx=(N(s*0.8,2,5)-0.5)*2*r;
+      const n=fbm3(fx/s+wx,y/(s*2.8),fz/s-wx,4,sd);
+      const flame=sstep(0,1,(n-0.5)*3+(0.55-vf)*2.5);
+      const crk=Math.pow(1-Math.abs(2*vnoise3(fx/(s*0.25),y/(s*0.25),fz/(s*0.25),sd+9)-1),6);
+      return clamp(flame*(1-0.35*crk),0,1);
+    }
+    case 'cord':{ // 繩紋 — rolled/paddled twisted cord impressions
+      const k=Math.round(C*Math.sin(a)/s), m=Math.cos(a)/s;
+      const t=frac(k*T+y*m);
+      const g=Math.pow(Math.sin(Math.PI*t),0.7);
+      const a2=a+Math.PI/2, s2=s*1.1;
+      const k2=Math.round(C*Math.sin(a2)/s2), m2=Math.cos(a2)/s2;
+      const bead=0.5+0.5*Math.cos(2*Math.PI*(k2*T+y*m2+t*0.9));  // slanted twist segments
+      let v=g*(0.55+0.45*bead);
+      const patch=sstep(0.35,0.6,N(s*8,2,11));                    // uneven paddling coverage
+      v*=1-r*0.85*(1-patch);
+      return clamp(v,0,1);
+    }
+    case 'throw':{ // 拉坯痕 — spiral throwing rings
+      const warp=(N(s*6,2,13)-0.5)*r*1.5;
+      const ph=y/s+T+warp;
+      let v=Math.pow((1+Math.cos(2*Math.PI*ph))/2,1.4);
+      v*=0.55+0.9*N(s*3,2,17);
+      return clamp(v,0,1);
+    }
+    case 'bamboo':{ // 竹節紋 — nodes + fine fibres
+      const t=frac(y/s), d=Math.min(t,1-t);
+      const ring=Math.exp(-Math.pow(d/0.035,2));
+      const groove=Math.exp(-Math.pow((t-0.07)/0.02,2))*0.5;
+      const swell=0.18*Math.sin(Math.PI*t);
+      const kf=Math.max(8,Math.round(C/1.6));
+      const fib=0.12*(1+Math.cos(kf*theta))/2*(0.5+r);
+      const irr=(N(s*0.5,2,19)-0.5)*0.3*r;
+      return clamp(ring+swell+fib-groove+irr+0.15,0,1);
+    }
+    case 'scale':{ // 魚鱗紋 — overlapping scales, offset rows
+      const n=Math.max(2,Math.round(C/s)), cs=C/n, rh=cs*0.62;
+      const row=Math.floor(y/rh), fv=y/rh-row;
+      const fu=frac(T*n+((row&1)?0.5:0))-0.5;
+      const d=Math.hypot(fu*cs,(1-fv)*rh*0.95)/(cs*0.56);
+      let v;
+      if(d<1){v=0.2+0.8*d*d;if(d>0.9)v*=(1-d)/0.1*0.7+0.3;}
+      else v=0.15;
+      v+=(N(s*0.4,2,23)-0.5)*0.3*r;
+      return clamp(v,0,1);
+    }
+    case 'custom':{ // 自訂向量紋理 — tiled in mm, slant via angle, optional brick offset
+      if(!_ctPix)return 0;
+      const n=Math.max(1,Math.round(C/s)), sw=C/n, th=sw*_ctH/_ctW;
+      const tv=y/th;
+      let tu=T*n+y*Math.tan(clamp(a,-1.3,1.3))/sw;
+      if(p.stagger&&(Math.floor(tv)&1))tu+=0.5;
+      const val=_ctSample(tu,tv);
+      return p.inv?1-val:val;
+    }
+    case 'pinch':{ // 指捏痕 — scattered thumb presses (Worley cells)
+      const n=Math.max(3,Math.round(C/s)), cs=C/n;
+      const gu=T*n, gv=y/cs, ix=Math.floor(gu), iy=Math.floor(gv);
+      let best=9;
+      for(let dy=-1;dy<=1;dy++)for(let dx=-1;dx<=1;dx++){
+        const cx=ix+dx, cy=iy+dy, wx=((cx%n)+n)%n;
+        const jx=0.5+(_h3(wx,cy,0,sd)-0.5)*r, jy=0.5+(_h3(wx,cy,1,sd)-0.5)*r;
+        const ddx=cx+jx-gu, ddy=(cy+jy-gv)*1.15;
+        const d=ddx*ddx+ddy*ddy; if(d<best)best=d;
+      }
+      return clamp(Math.pow(Math.max(0,1-Math.sqrt(best)/0.5),1.6),0,1);
+    }
+  }
+  return 0;
+}
+
+let texRefR=40, texPrm={s:12,r:0.4,a:0,seed:7};
+function updateTexRef(){
+  if(isSlab())texRefR=40;
+  else{let sum=0;for(let k=0;k<=20;k++)sum+=Math.max(2,getR(k/20));texRefR=sum/21;}
+  texPrm={s:P.texScale,r:P.texRough,a:P.texAngle*Math.PI/180,seed:P.texSeed,inv:P.texInvert,stagger:P.texStagger};
+}
+function texDisp(theta,v){
+  if(!P.texType||P.texType==='none'||!P.texAmp)return 0;
+  return P.texAmp*texSample(P.texType,theta,v*P.h,v,texRefR,texPrm);
+}
+
+// ── Custom vector texture (自訂向量紋理) ──
+// Dark / filled areas of the uploaded SVG (or image) = raised; tiled in real mm.
+let _ctImg=null,_ctPix=null,_ctW=0,_ctH=0,_ctSrc=null,_ctName='';
+function rasterCustomTex(){
+  if(!_ctImg)return;
+  const iw=_ctImg.naturalWidth||512, ih=_ctImg.naturalHeight||512;
+  const S=384, sc=S/Math.max(iw,ih);
+  const W=Math.max(8,Math.round(iw*sc)), H=Math.max(8,Math.round(ih*sc));
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;
+  const ctx=cv.getContext('2d');
+  ctx.fillStyle='#fff';ctx.fillRect(0,0,W,H);
+  const blur=P.texRough*10;
+  if(blur>0.2)ctx.filter=`blur(${blur.toFixed(1)}px)`;
+  ctx.drawImage(_ctImg,0,0,W,H);
+  ctx.filter='none';
+  const d=ctx.getImageData(0,0,W,H).data;
+  _ctPix=new Float32Array(W*H);
+  for(let i=0;i<W*H;i++)_ctPix[i]=1-(d[i*4]*0.299+d[i*4+1]*0.587+d[i*4+2]*0.114)/255;
+  _ctW=W;_ctH=H;
+  drawCustomTexThumb();
+  schedRegen();
+}
+function _ctSample(u,v){
+  const px=frac(u)*(_ctW-1), py=(1-frac(v))*(_ctH-1);
+  const x0=px|0,y0=py|0,x1=Math.min(x0+1,_ctW-1),y1=Math.min(y0+1,_ctH-1);
+  const fx=px-x0,fy=py-y0,W=_ctW;
+  return _ctPix[y0*W+x0]*(1-fx)*(1-fy)+_ctPix[y0*W+x1]*fx*(1-fy)+
+         _ctPix[y1*W+x0]*(1-fx)*fy+_ctPix[y1*W+x1]*fx*fy;
+}
+function setCustomTexFromURL(url,name,apply){
+  const img=new Image();
+  img.onload=()=>{
+    _ctImg=img;_ctSrc=url;_ctName=name||'';
+    rasterCustomTex();
+    if(apply)applyTex(CUSTOM_TEX);
+    else syncLexUI();
+  };
+  img.onerror=()=>alert('無法讀取這個圖檔，請確認是有效的 SVG 或圖片');
+  img.src=url;
+}
+function loadCustomTexFile(file){
+  const isSvg=/svg/i.test(file.type)||/\.svg$/i.test(file.name);
+  const rd=new FileReader();
+  if(isSvg){
+    rd.onload=e=>{
+      // Make sure the SVG has explicit size so it rasterizes reliably
+      let txt=e.target.result;
+      try{
+        const doc=new DOMParser().parseFromString(txt,'image/svg+xml');
+        const el=doc.documentElement;
+        const vb=(el.getAttribute('viewBox')||'').trim().split(/[\s,]+/).map(Number);
+        if(vb.length===4&&vb[2]>0&&vb[3]>0){
+          const k=1024/Math.max(vb[2],vb[3]);
+          el.setAttribute('width',Math.round(vb[2]*k));el.setAttribute('height',Math.round(vb[3]*k));
+        }else if(!el.getAttribute('width')){el.setAttribute('width','1024');el.setAttribute('height','1024');}
+        txt=new XMLSerializer().serializeToString(el);
+      }catch(err){}
+      setCustomTexFromURL('data:image/svg+xml;charset=utf-8,'+encodeURIComponent(txt),file.name,true);
+    };
+    rd.readAsText(file);
+  }else{
+    rd.onload=e=>setCustomTexFromURL(e.target.result,file.name,true);
+    rd.readAsDataURL(file);
+  }
+}
+
+let smoothPreview=false;
+function totalDisp(theta,v){
+  if(smoothPreview)return 0;
+  const env=getEnvMultiplier(v);
+  const envMult=P.dispEnv?env:1;
+  return (ribDisp(theta,v)+rib2Disp(theta,v)+vertDisp(theta)+horizDisp(v)+crumpleDisp(theta,v)+bumpDisp(theta,v)+texDisp(theta,v))*env
+        + lobeDisp(theta,v)   // lobe & stack & axisBulge bypass env (they define overall shape, not texture)
+        + stackDisp(theta,v)
+        + axisBulgeDisp(theta,v)
+        + dispMapDisp(theta,v)*envMult;
+}
+
+// ── Edge chamfer (R-corner) ──────────────────────────────────────────
+// Pulls the outer radius inward near top / bottom with a quarter-circle curve,
+// creating a smooth rounded edge instead of a sharp 90° corner.
+function applyRimR(v, R){
+  const{rimR,rimRBot,rimRTop,h}=P;
+  if(rimR<=0)return R;
+  const zone=Math.min(rimR, h*0.45); // chamfer depth in mm (clamped to 45% of height)
+  const vZ=zone/h;                   // normalised zone extent
+  let pull=0;
+  if(rimRBot&&v<vZ){
+    const t=v/vZ;                    // 0 = bottom edge, 1 = zone end
+    pull=Math.max(pull, zone*(1-Math.sin(t*Math.PI/2)));
+  }
+  if(rimRTop&&v>1-vZ){
+    const t=(v-(1-vZ))/vZ;           // 0 = zone start, 1 = top edge
+    pull=Math.max(pull, zone*(1-Math.cos(t*Math.PI/2)));
+  }
+  return Math.max(0.5, R-pull);
+}
+
+// ══════════════════════════════════
+// MESH GENERATION
+// ══════════════════════════════════
+// Axis bend: lateral S-curve shift of the centre axis as a function of v
+function getAxisOffset(v){
+  const{axisBend,axisBendFreq,axisBendPhase,axisTwist}=P;
+  if(!axisBend)return{x:0,z:0};
+  // axisTwist rotates the bend direction as v increases → helical/wrapping axis
+  const ang=(axisBendPhase+axisTwist*v)*Math.PI/180;
+  const d=axisBend*Math.sin(axisBendFreq*2*Math.PI*v);
+  return{x:d*Math.cos(ang),z:d*Math.sin(ang)};
+}
+// Directional bulge: adds extra radius on the convex side of the axis bend
+// → vessel wall bulges outward from the direction the axis leans
+function axisBulgeDisp(theta,v){
+  const{axisBend,axisBulge,axisBendFreq,axisBendPhase,axisTwist}=P;
+  if(!axisBend||!axisBulge)return 0;
+  const ang=(axisBendPhase+axisTwist*v)*Math.PI/180;
+  // normalised sign of current offset → which side is convex
+  const dNorm=Math.sin(axisBendFreq*2*Math.PI*v);
+  // projection of ring normal onto offset direction
+  const proj=Math.cos(theta)*dNorm*Math.cos(ang)+Math.sin(theta)*dNorm*Math.sin(ang);
+  return axisBulge*proj;
+}
+
+// ── Open arc helpers (瓦片 / 筒瓦) ──
+function isSlab(){return P.shape==='slab';}
+function isOpenArc(){return isSlab()||(P.arcSpan||360)<359.5;}
+function slabX(i){return P.slabW/2-(i/SEG_A)*P.slabW;}
+function colCount(){return isOpenArc()?SEG_A+1:SEG_A;}
+function colTheta(i){
+  if(isSlab())return slabX(i)/texRefR;   // pseudo-angle so textures stay in mm
+  if(isOpenArc()){const a=P.arcSpan*Math.PI/180;return Math.PI/2-a/2+(i/SEG_A)*a;}
+  return (i/SEG_A)*2*Math.PI;
+}
+function nextCol(i){return isOpenArc()?i+1:(i+1)%SEG_A;}
+
+function buildPosGrid(isInner){
+  const NC=colCount(),M=SEG_H,{h}=P;
+  const G=[];
+  for(let j=0;j<=M;j++){
+    const v=j/M, y=h*v;
+    const ao=getAxisOffset(v);
+    const row=[];
+    for(let i=0;i<NC;i++){
+      const theta=colTheta(i);
+      if(isSlab()){
+        // Flat tile: back face z=0, textured front face z = thickness + displacement
+        const x=slabX(i);
+        if(isInner){row.push([x,y,0]);continue;}
+        let z=P.wallT+totalDisp(theta,v);
+        if(!isFinite(z))z=P.wallT;
+        row.push([x,y,Math.max(0.3,z)]);
+        continue;
+      }
+      const disp=totalDisp(theta,v);
+      let R;
+      if(isInner){
+        R=Math.max(0.5,getR(v)+disp-P.wallT);
+      } else {
+        R=applyRimR(v, Math.max(0.05,getR(v)+disp));
+      }
+      if(!isFinite(R))R=0.05; // hard NaN guard
+      row.push([R*Math.cos(theta)+ao.x, y, R*Math.sin(theta)+ao.z]);
+    }
+    G.push(row);
+  }
+  return G;
+}
+
+function buildNormGrid(G){
+  const M=SEG_H, open=isOpenArc();
+  const GN=[];
+  for(let j=0;j<=M;j++){
+    const NC=G[j].length, row=[];
+    for(let i=0;i<NC;i++){
+      const ip=open?Math.min(i+1,NC-1):(i+1)%NC;
+      const im=open?Math.max(i-1,0):(i+NC-1)%NC;
+      const jp=Math.min(j+1,M), jm=Math.max(j-1,0);
+      const[ax,ay,az]=G[j][ip],[bx,by,bz]=G[j][im];
+      const[cx,cy,cz]=G[jp][i],[dx,dy,dz]=G[jm][i];
+      const du=[ax-bx,ay-by,az-bz];
+      const dv=[cx-dx,cy-dy,cz-dz];
+      let nx=dv[1]*du[2]-dv[2]*du[1];
+      let ny=dv[2]*du[0]-dv[0]*du[2];
+      let nz=dv[0]*du[1]-dv[1]*du[0];
+      const l=Math.sqrt(nx*nx+ny*ny+nz*nz);
+      if(l>1e-12&&isFinite(l)){row.push([nx/l,ny/l,nz/l]);}
+      else{const th=colTheta(i);row.push([Math.cos(th),0,Math.sin(th)]);}
+    }
+    GN.push(row);
+  }
+  return GN;
+}
+
+function addSurface(posA,norA,hgtA,G,GN,flip,normFn){
+  const N=SEG_A,M=SEG_H, s=flip?-1:1;
+  for(let j=0;j<M;j++){
+    for(let i=0;i<N;i++){
+      const ni=nextCol(i);
+      const corners=flip
+        ?[[i,j],[i,j+1],[ni,j+1],[ni,j]]
+        :[[i,j],[ni,j],[ni,j+1],[i,j+1]];
+      for(const tri of[[0,1,2],[0,2,3]]){
+        for(const k of tri){
+          const[vi,vj]=corners[k];
+          const[x,y,z]=G[vj][vi];
+          posA.push(...normFn(x,y,z));
+          const n=GN[vj][vi];
+          norA.push(n[0]*s,n[1]*s,n[2]*s);
+          hgtA.push(vj/M);
+        }
+      }
+    }
+  }
+}
+
+// Solid mode: flat cap (fan of triangles from center to ring) — closed revolutions only
+// Centre of a closed ring — follows axis bend / lateral offsets so caps never spike out
+function ringCenter(G,j){
+  let x=0,y=0,z=0;const n=SEG_A;
+  for(let i=0;i<n;i++){x+=G[j][i][0];y+=G[j][i][1];z+=G[j][i][2];}
+  return[x/n,y/n,z/n];
+}
+function addCap(posA,norA,hgtA,G,atTop,normFn){
+  const N=SEG_A,M=SEG_H;
+  const j=atTop?M:0, ny=atTop?1:-1, hgt=atTop?1:0;
+  const center=normFn(...ringCenter(G,j));
+  for(let i=0;i<N;i++){
+    const ni=(i+1)%N;
+    const p0=normFn(...G[j][i]);
+    const p1=normFn(...G[j][ni]);
+    const tri=atTop?[center,p1,p0]:[center,p0,p1];
+    for(const v of tri){posA.push(...v);norA.push(0,ny,0);hgtA.push(hgt);}
+  }
+}
+
+function addRim(posA,norA,hgtA,Go,Gi,atTop,normFn){
+  const N=SEG_A,M=SEG_H;
+  const j=atTop?M:0, ny=atTop?1:-1, hgt=atTop?1:0;
+  for(let i=0;i<N;i++){
+    const ni=nextCol(i);
+    const corners=atTop
+      ?[Go[j][ni],Go[j][i],Gi[j][i],Gi[j][ni]]
+      :[Go[j][i],Go[j][ni],Gi[j][ni],Gi[j][i]];
+    for(const tri of[[0,1,2],[0,2,3]]){
+      for(const k of tri){
+        const[x,y,z]=corners[k];
+        posA.push(...normFn(x,y,z));
+        norA.push(0,ny,0);
+        hgtA.push(hgt);
+      }
+    }
+  }
+}
+
+// Open arc: close the two cut edges between outer and inner walls
+function sideWallQuads(Go,Gi,j){
+  const L=SEG_A;
+  return[
+    [Go[j][0],Gi[j][0],Gi[j+1][0],Go[j+1][0]],      // start edge (normal → −θ)
+    [Go[j][L],Go[j+1][L],Gi[j+1][L],Gi[j][L]]       // end edge   (normal → +θ)
+  ];
+}
+function addSideWalls(posA,norA,hgtA,Go,Gi,normFn){
+  const M=SEG_H;
+  for(let j=0;j<M;j++){
+    for(const q of sideWallQuads(Go,Gi,j)){
+      const[a,b,c]=q;
+      let nx=(b[1]-a[1])*(c[2]-a[2])-(b[2]-a[2])*(c[1]-a[1]);
+      let ny=(b[2]-a[2])*(c[0]-a[0])-(b[0]-a[0])*(c[2]-a[2]);
+      let nz=(b[0]-a[0])*(c[1]-a[1])-(b[1]-a[1])*(c[0]-a[0]);
+      const l=Math.hypot(nx,ny,nz)||1;nx/=l;ny/=l;nz/=l;
+      for(const tri of[[0,1,2],[0,2,3]])for(const k of tri){
+        posA.push(...normFn(...q[k]));norA.push(nx,ny,nz);hgtA.push(j/M);
+      }
+    }
+  }
+}
+
+let mesh=null;
+let lastMeshOk=true; // track whether current mesh rendered cleanly
+
+function buildMesh(){
+  updateTexRef();
+  const{h}=P;
+  const profileMax=(P.shape==='custom'||P.shape==='belly')
+    ? Math.max(...P.profilePts.map(p=>isFinite(p.r)?p.r:0)) : 0;
+  const maxR=Math.max(P.topR,P.botR,profileMax);
+  const maxDim=isSlab()
+    ? Math.max(P.slabW,P.h)+4
+    : Math.max(maxR*2+Math.abs(P.ribH)*2+Math.abs(P.texAmp||0)*2+4, P.h);
+  const zc=isSlab()?P.wallT/2:0;
+  function normFn(x,y,z){return[x/maxDim*2,(y-h/2)/maxDim*2,(z-zc)/maxDim*2];}
+
+  const open=isOpenArc();
+  const hollow=P.hollow||open;   // an open arc only makes sense as a shell
+
+  const Go=buildPosGrid(false);
+  const GN_out=buildNormGrid(Go);
+
+  let Gi=null, GN_in=null;
+  if(hollow){
+    Gi=buildPosGrid(true);
+    GN_in=buildNormGrid(Gi);
+  }
+
+  const posA=[],norA=[],hgtA=[];
+  addSurface(posA,norA,hgtA,Go,GN_out,false,normFn);
+
+  if(hollow&&Gi){
+    addSurface(posA,norA,hgtA,Gi,GN_in,true,normFn);
+    addRim(posA,norA,hgtA,Go,Gi,true,normFn);
+    if(P.sealBot&&!open){
+      addCap(posA,norA,hgtA,Go,false,normFn);
+    } else {
+      addRim(posA,norA,hgtA,Go,Gi,false,normFn);
+    }
+    if(open)addSideWalls(posA,norA,hgtA,Go,Gi,normFn);
+  } else {
+    addCap(posA,norA,hgtA,Go,true,normFn);
+    addCap(posA,norA,hgtA,Go,false,normFn);
+  }
+
+  // Simplified wireframe: ~12 rings + ~16 meridians (outer surface only)
+  const wfA=[];
+  const N=SEG_A,M=SEG_H,NC=colCount();
+  const rs=Math.max(1,Math.round(M/12)), ms=Math.max(1,Math.round(N/16));
+  for(let j=0;j<=M;j+=rs){
+    for(let i=0;i<N;i++){
+      wfA.push(...normFn(...Go[j][i]),...normFn(...Go[j][nextCol(i)]));
+    }
+  }
+  for(let i=0;i<NC;i+=ms){
+    for(let j=0;j<M;j++){
+      wfA.push(...normFn(...Go[j][i]),...normFn(...Go[j+1][i]));
+    }
+  }
+
+  return{
+    pos:new Float32Array(posA),nor:new Float32Array(norA),hgt:new Float32Array(hgtA),
+    triCount:posA.length/3,
+    wf:new Float32Array(wfA),wfCount:wfA.length/3,
+    Go,Gi,maxDim,normFn
+  };
+}
+
+// ══════════════════════════════════
+// PRINT ANGLE ANALYSIS
+// ══════════════════════════════════
+function calcAngles(){
+  const{h}=P;
+  const N=SEG_A, steps=60;
+  let maxBodyAngle=0, maxRibAngle=0;
+
+  for(let k=0;k<steps;k++){
+    const v0=k/steps, v1=(k+1)/steps;
+    // Body angle (at angle 0, no rib)
+    const r0=getR(v0), r1=getR(v1);
+    const dh=h/steps;
+    const bodyA=Math.atan2(Math.abs(r1-r0),dh)*180/Math.PI;
+    if(bodyA>maxBodyAngle)maxBodyAngle=bodyA;
+
+    // Rib angle: steepest slope in the theta direction at mid-height
+    if(P.numRibs>0&&P.ribH>0){
+      const vm=(v0+v1)/2;
+      const r_base=getR(vm);
+      let maxSlope=0;
+      for(let i=0;i<N;i++){
+        const t0=(i/N)*2*Math.PI, t1=((i+1)/N)*2*Math.PI;
+        const R0=r_base+totalDisp(t0,vm);
+        const R1=r_base+totalDisp(t1,vm);
+        const dR=Math.abs(R1-R0);
+        const arcLen=r_base*(t1-t0);
+        const s=Math.atan2(dR,arcLen)*180/Math.PI;
+        if(s>maxSlope)maxSlope=s;
+      }
+      if(maxSlope>maxRibAngle)maxRibAngle=maxSlope;
+    }
+  }
+
+  // Also check height direction with ribs
+  for(let i=0;i<N;i++){
+    const theta=(i/N)*2*Math.PI;
+    for(let k=0;k<steps;k++){
+      const v0=k/steps, v1=(k+1)/steps;
+      const R0=getR(v0)+totalDisp(theta,v0);
+      const R1=getR(v1)+totalDisp(theta,v1);
+      const dR=Math.abs(R1-R0);
+      const dh=P.h/steps;
+      const a=Math.atan2(dR,dh)*180/Math.PI;
+      if(a>maxBodyAngle)maxBodyAngle=a;
+    }
+  }
+
+  return{body:maxBodyAngle, rib:maxRibAngle};
+}
+
+function updatePrintInfo(){
+  if(isSlab()){
+    document.getElementById('print-info').innerHTML=`
+      <div style="font-size:12.5px;font-weight:600;color:#6bcb77;margin-bottom:4px;">✓ 平放列印，無需支撐</div>
+      <div style="font-size:11px;color:#a1a1a6;line-height:1.7;">平板磚：背面朝下平放，紋理面朝上。<br>
+      尺寸 ${P.slabW} × ${P.h} mm，底板厚 ${P.wallT} mm${P.texAmp<0&&-P.texAmp>=P.wallT?'<br><span style="color:#f4a261">⚠ 刻印深度接近或超過板厚</span>':''}</div>`;
+    return;
+  }
+  const{body}=calcAngles();
+  const{topR,botR,h,hollow,wallT}=P;
+
+  let color,label,detail;
+  if(body<40){color='#30d158';label='✓ 無需支撐';detail='可直接列印，角度安全';}
+  else if(body<52){color='#ff9f0a';label='⚠ 建議測試';detail='接近部分印表機極限';}
+  else{color='#ff6961';label='✗ 建議加支撐';detail='超過多數印表機極限(~45°)';}
+
+  const pct=Math.min(100,(body/90)*100);
+  const barColor=body<40?'#30d158':body<52?'#ff9f0a':'#ff6961';
+
+  const sideAngle=(body).toFixed(1);
+  const openingAngle=(Math.atan2(Math.abs(topR-botR),h)*180/Math.PI*2).toFixed(1);
+
+  document.getElementById('print-info').innerHTML=`
+    <div style="display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:4px;">
+      <div>
+        <div style="font-size:11px;color:#a1a1a6;margin-bottom:1px;">最大側壁角度（從垂直軸）</div>
+        <div style="font-size:22px;font-weight:700;color:${color};line-height:1">${sideAngle}°</div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;color:#a1a1a6;margin-bottom:1px;">杯口展開角</div>
+        <div style="font-size:16px;font-weight:600;color:#2997ff;line-height:1">${openingAngle}°</div>
+      </div>
+    </div>
+    <div class="angle-bar-wrap">
+      <div class="angle-bar" style="width:${pct}%;background:${barColor};"></div>
+    </div>
+    <div style="display:flex;justify-content:space-between;font-size:11px;color:#a1a1a6;margin-bottom:7px;">
+      <span>0° 垂直</span><span>45° 極限</span><span>90° 水平</span>
+    </div>
+    <div style="font-size:11.5px;color:${color};font-weight:600;margin-bottom:3px;">${label}</div>
+    <div style="font-size:11px;color:#a1a1a6;">${detail}</div>
+    <div style="margin-top:8px;padding-top:7px;border-top:1px solid #38383a;font-size:11px;color:#a1a1a6;line-height:1.7;">
+      建議列印方向：${topR>=botR?'底部朝下，開口朝上':'開口朝下，底部朝上'}<br>
+      ${hollow?`壁厚 ${wallT} mm${wallT<1.2?' ⚠ 過薄':''}`:''  }
+    </div>
+  `;
+}
+
+// ══════════════════════════════════
+// WEBGL
+// ══════════════════════════════════
+const canvas=document.getElementById('c');
+const gl=canvas.getContext('webgl',{antialias:true,preserveDrawingBuffer:true});
+
+const VS=`
+attribute vec3 aP;
+attribute vec3 aN;
+attribute float aH;
+uniform mat4 uMVP;
+uniform mat4 uMV;
+varying vec3 vN;
+varying vec3 vVP;
+varying float vH;
+void main(){
+  gl_Position=uMVP*vec4(aP,1.0);
+  vN=normalize(mat3(uMV[0].xyz,uMV[1].xyz,uMV[2].xyz)*aN);
+  vVP=(uMV*vec4(aP,1.0)).xyz;
+  vH=aH;
+}`;
+const FS=`
+precision mediump float;
+varying vec3 vN;varying vec3 vVP;varying float vH;
+uniform vec3 uLD;uniform vec3 uBC;uniform vec3 uTC;uniform float uGA;uniform float uLI;
+void main(){
+  vec3 n=normalize(vN);
+  float d=max(dot(n,normalize(uLD)),0.0);
+  float s=pow(max(dot(reflect(-normalize(uLD),n),normalize(-vVP)),0.0),40.0);
+  float light=0.28+d*uLI*0.72+s*0.1*uLI;
+  gl_FragColor=vec4(mix(uBC,uTC,vH*uGA)*light,1.0);
+}`;
+const FS_WF=`precision mediump float;void main(){gl_FragColor=vec4(0.16,0.59,1.0,1.0);}`;
+
+function mkS(t,s){const sh=gl.createShader(t);gl.shaderSource(sh,s);gl.compileShader(sh);return sh;}
+function mkP(vs,fs){const p=gl.createProgram();gl.attachShader(p,mkS(gl.VERTEX_SHADER,vs));gl.attachShader(p,mkS(gl.FRAGMENT_SHADER,fs));gl.linkProgram(p);return p;}
+
+const prog=mkP(VS,FS), wprog=mkP(VS,FS_WF);
+const U={
+  mvp:gl.getUniformLocation(prog,'uMVP'),mv:gl.getUniformLocation(prog,'uMV'),
+  ld:gl.getUniformLocation(prog,'uLD'),bc:gl.getUniformLocation(prog,'uBC'),
+  tc:gl.getUniformLocation(prog,'uTC'),ga:gl.getUniformLocation(prog,'uGA'),li:gl.getUniformLocation(prog,'uLI')
+};
+const WU={mvp:gl.getUniformLocation(wprog,'uMVP'),mv:gl.getUniformLocation(wprog,'uMV')};
+
+const bPos=gl.createBuffer(),bNor=gl.createBuffer(),bHgt=gl.createBuffer(),bWF=gl.createBuffer();
+
+// ══════════════════════════════════
+// MESH VALIDATION & WARNING
+// ══════════════════════════════════
+function getMeshDiagnostics(){
+  const issues=[], hints=[];
+
+  if(P.shape==='custom'||P.shape==='belly'){
+    const pts=P.profilePts;
+
+    // 1. Sample spline for near-zero or negative radius
+    let minSampledR=Infinity, minSampledV=0;
+    for(let k=0;k<=60;k++){
+      const vv=k/60;
+      const r=catmullRomR(vv,pts);
+      if(isFinite(r)&&r<minSampledR){minSampledR=r;minSampledV=vv;}
+    }
+    if(minSampledR<1){
+      issues.push(`輪廓曲線在高度 ${Math.round(minSampledV*100)}% 處半徑接近零（≈${minSampledR.toFixed(1)} mm）`);
+      hints.push('向右拖曳控制點，確保每一高度位置的半徑都 ≥ 2 mm');
+    }
+
+    // 2. Degenerate v-spacing between control points
+    for(let i=0;i<pts.length-1;i++){
+      if(pts[i+1].v-pts[i].v<0.02){
+        issues.push('相鄰控制點高度位置過於接近，曲線無法正確插值');
+        hints.push('拖曳控制點拉開間距，或雙擊刪除重疊的中間點');
+        break;
+      }
+    }
+
+    // 3. Catmull-Rom overshoot: sample max vs control-point max
+    const maxPtR=Math.max(...pts.map(p=>isFinite(p.r)&&p.r>0?p.r:0));
+    let maxSampledR=0;
+    for(let k=0;k<=80;k++){
+      const r=catmullRomR(k/80,pts);
+      if(isFinite(r)&&r>maxSampledR)maxSampledR=r;
+    }
+    if(maxPtR>0&&maxSampledR>maxPtR*1.5){
+      issues.push(`曲線出現嚴重超出（取樣最大 ${Math.round(maxSampledR)} mm，控制點最大 ${Math.round(maxPtR)} mm）`);
+      hints.push('縮小相鄰控制點之間的半徑差，或按「清除中間點」後重新調整');
+    }
+
+    // 4. Any NaN in control point r values
+    const nanPt=pts.find(p=>!isFinite(p.r));
+    if(nanPt){
+      issues.push('控制點半徑資料損壞（NaN），模型無法生成');
+      hints.push('按「清除中間點」清除中間點，或點「↺ 預設值」恢復初始值');
+    }
+  }
+
+  // 5. Hollow: wallT >= smallest outer radius
+  if(P.hollow&&!isSlab()){
+    let minOuterR;
+    if(P.shape==='custom'||P.shape==='belly'){
+      minOuterR=Infinity;
+      for(let k=0;k<=20;k++){const r=catmullRomR(k/20,P.profilePts);if(isFinite(r)&&r<minOuterR)minOuterR=r;}
+    }else{
+      minOuterR=Math.min(P.topR,P.botR);
+    }
+    if(isFinite(minOuterR)&&minOuterR-P.wallT<0.5){
+      issues.push(`壁厚（${P.wallT} mm）超過最小外側半徑（${minOuterR.toFixed(1)} mm），內壁幾何無效`);
+      hints.push('請減少壁厚，或增大頂部／底部半徑');
+    }
+  }
+
+  return {issues, hints};
+}
+
+function checkPosBufferNaN(posArr){
+  // Sample first ~900 floats (= 300 vertices) for speed
+  const limit=Math.min(posArr.length,900);
+  for(let i=0;i<limit;i++)if(!isFinite(posArr[i]))return true;
+  return false;
+}
+
+function showMeshWarning(extraIssues, extraHints){
+  const wEl=document.getElementById('mesh-warn');
+  const iEl=document.getElementById('mesh-warn-issues');
+  const hEl=document.getElementById('mesh-warn-hints');
+  const{issues,hints}=getMeshDiagnostics();
+  if(extraIssues)issues.push(...extraIssues);
+  if(extraHints)hints.push(...extraHints);
+  if(issues.length===0){wEl.style.display='none';lastMeshOk=true;return;}
+  lastMeshOk=false;
+  iEl.innerHTML=issues.map(s=>`<div class="wi">• ${s}</div>`).join('');
+  if(hints.length>0){
+    hEl.innerHTML='<b>調整建議：</b><br>'+hints.map(h=>`• ${h}`).join('<br>');
+    hEl.style.display='block';
+  }else{
+    hEl.style.display='none';
+  }
+  wEl.style.display='block';
+}
+
+function hideMeshWarning(){
+  document.getElementById('mesh-warn').style.display='none';
+  lastMeshOk=true;
+}
+
+function resetCameraAndRegen(){
+  theta=0.4;phi=1.05;radius=3.2;
+  upload();
+}
+
+function upload(){
+  try{
+    const m=buildMesh();
+    const hasNaN=checkPosBufferNaN(m.pos)||checkPosBufferNaN(m.nor);
+    if(!hasNaN){
+      // Only push to GPU when data is clean — preserves last valid render on bad input
+      gl.bindBuffer(gl.ARRAY_BUFFER,bPos);gl.bufferData(gl.ARRAY_BUFFER,m.pos,gl.DYNAMIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER,bNor);gl.bufferData(gl.ARRAY_BUFFER,m.nor,gl.DYNAMIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER,bHgt);gl.bufferData(gl.ARRAY_BUFFER,m.hgt,gl.DYNAMIC_DRAW);
+      gl.bindBuffer(gl.ARRAY_BUFFER,bWF);gl.bufferData(gl.ARRAY_BUFFER,m.wf,gl.DYNAMIC_DRAW);
+      mesh=m;
+    }
+    if(hasNaN){
+      showMeshWarning(['幾何資料含有無效數值（NaN），顯示上一個有效模型'],['按「↺ 重設相機並重新生成」，或點「↺ 預設值」恢復初始設定']);
+    } else {
+      showMeshWarning(); // will hide if no other issues
+    }
+    updateHUD();
+    updatePrintInfo();
+  }catch(e){
+    console.error('buildMesh failed:',e);
+    showMeshWarning(['模型生成失敗：'+e.message],['請嘗試清除中間控制點，或點「↺ 預設值」恢復初始設定']);
+  }
+}
+
+function bindGeom(p){
+  const aP=gl.getAttribLocation(p,'aP'),aN=gl.getAttribLocation(p,'aN'),aH=gl.getAttribLocation(p,'aH');
+  gl.bindBuffer(gl.ARRAY_BUFFER,bPos);gl.enableVertexAttribArray(aP);gl.vertexAttribPointer(aP,3,gl.FLOAT,false,0,0);
+  gl.bindBuffer(gl.ARRAY_BUFFER,bNor);gl.enableVertexAttribArray(aN);gl.vertexAttribPointer(aN,3,gl.FLOAT,false,0,0);
+  if(aH>=0){gl.bindBuffer(gl.ARRAY_BUFFER,bHgt);gl.enableVertexAttribArray(aH);gl.vertexAttribPointer(aH,1,gl.FLOAT,false,0,0);}
+}
+function bindWF(p){
+  const aP=gl.getAttribLocation(p,'aP'),aN=gl.getAttribLocation(p,'aN'),aH=gl.getAttribLocation(p,'aH');
+  gl.bindBuffer(gl.ARRAY_BUFFER,bWF);
+  gl.enableVertexAttribArray(aP);gl.vertexAttribPointer(aP,3,gl.FLOAT,false,0,0);
+  if(aN>=0){gl.disableVertexAttribArray(aN);gl.vertexAttrib3f(aN,0,1,0);}
+  if(aH>=0){gl.disableVertexAttribArray(aH);gl.vertexAttrib1f(aH,0);}
+}
+
+// ══════════════════════════════════
+// CAMERA
+// ══════════════════════════════════
+let theta=0.4,phi=1.05,radius=3.2,drag=null;
+function getEye(){return[radius*Math.sin(phi)*Math.sin(theta),radius*Math.cos(phi),radius*Math.sin(phi)*Math.cos(theta)];}
+
+canvas.addEventListener('mousedown',e=>{drag=[e.clientX,e.clientY,theta,phi];});
+window.addEventListener('mousemove',e=>{if(!drag)return;theta=drag[2]-(e.clientX-drag[0])*0.011;phi=clamp(drag[3]+(e.clientY-drag[1])*0.011,0.08,Math.PI-0.08);});
+window.addEventListener('mouseup',()=>drag=null);
+canvas.addEventListener('wheel',e=>{radius=clamp(radius+e.deltaY*0.004,0.5,12);e.preventDefault();},{passive:false});
+
+let lt=null,ltp=null;
+canvas.addEventListener('touchstart',e=>{if(e.touches.length===1)lt=[e.touches[0].clientX,e.touches[0].clientY,theta,phi];else if(e.touches.length===2)ltp=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);e.preventDefault();},{passive:false});
+canvas.addEventListener('touchmove',e=>{if(e.touches.length===1&&lt){theta=lt[2]-(e.touches[0].clientX-lt[0])*0.011;phi=clamp(lt[3]+(e.touches[0].clientY-lt[1])*0.011,0.08,Math.PI-0.08);}else if(e.touches.length===2&&ltp){const d=Math.hypot(e.touches[1].clientX-e.touches[0].clientX,e.touches[1].clientY-e.touches[0].clientY);radius=clamp(radius*(ltp/d),0.5,12);ltp=d;}e.preventDefault();},{passive:false});
+canvas.addEventListener('touchend',()=>{lt=null;ltp=null;});
+
+// View presets
+document.querySelectorAll('.view-btn').forEach(btn=>{
+  btn.addEventListener('click',()=>{
+    theta=parseFloat(btn.dataset.theta);
+    phi=parseFloat(btn.dataset.phi);
+    document.querySelectorAll('.view-btn').forEach(b=>b.classList.remove('active'));
+    btn.classList.add('active');
+  });
+});
+
+// ══════════════════════════════════
+// RENDER
+// ══════════════════════════════════
+function resize(){const w=canvas.clientWidth,h=canvas.clientHeight;if(canvas.width!==w||canvas.height!==h){canvas.width=w;canvas.height=h;gl.viewport(0,0,w,h);}}
+
+function render(){
+  resize();
+  gl.clearColor(0.086,0.086,0.09,1);
+  gl.clear(gl.COLOR_BUFFER_BIT|gl.DEPTH_BUFFER_BIT);
+  gl.enable(gl.DEPTH_TEST);gl.disable(gl.CULL_FACE);
+  if(!mesh){requestAnimationFrame(render);return;}
+
+  const asp=canvas.width/canvas.height;
+  const proj=perspMat(50,asp,0.01,100);
+  const eye=getEye();
+  const view=lookAt(eye,[0,0,0],[0,1,0]);
+  const mvp=mul4(proj,view);
+  const la=P.lightA*Math.PI/180;
+  const ld=[Math.cos(la)*1.2,1.5,Math.sin(la)*1.2];
+
+  if(P.mode===0||P.mode===2){
+    gl.useProgram(prog);
+    gl.uniformMatrix4fv(U.mvp,false,mvp);gl.uniformMatrix4fv(U.mv,false,view);
+    gl.uniform3fv(U.ld,ld);
+    gl.uniform3fv(U.bc,P.baseCol);
+    gl.uniform3fv(U.tc,P.baseCol.map(c=>Math.min(1,c*1.45)));
+    gl.uniform1f(U.ga,P.gradAmt);gl.uniform1f(U.li,P.lightI);
+    bindGeom(prog);gl.drawArrays(gl.TRIANGLES,0,mesh.triCount);
+  }
+  if(P.mode===1||P.mode===2){
+    if(P.mode===2){gl.enable(gl.BLEND);gl.blendFunc(gl.SRC_ALPHA,gl.ONE_MINUS_SRC_ALPHA);gl.depthMask(false);}
+    gl.useProgram(wprog);
+    gl.uniformMatrix4fv(WU.mvp,false,mvp);gl.uniformMatrix4fv(WU.mv,false,view);
+    bindWF(wprog);gl.drawArrays(gl.LINES,0,mesh.wfCount);
+    if(P.mode===2){gl.disable(gl.BLEND);gl.depthMask(true);}
+  }
+  requestAnimationFrame(render);
+}
+
+// ══════════════════════════════════
+// HUD
+// ══════════════════════════════════
+function updateHUD(){
+  const{topR,botR,h,hollow,wallT,numRibs,twist}=P;
+  const sw=document.getElementById('slabW-row');if(sw)sw.style.display=isSlab()?'flex':'none';
+  if(isSlab()){
+    document.getElementById('dim-hud').innerHTML=
+      `<span style="color:#a1a1a6">平板磚</span> ${P.slabW} × ${h.toFixed(0)} mm<br>`+
+      `<span style="color:#a1a1a6">板厚</span> ${wallT} mm`+
+      (P.texType&&P.texType!=='none'?`<br><span style="color:#a1a1a6">紋理</span> ${texName(P.texType)}`:'');
+    return;
+  }
+  document.getElementById('dim-hud').innerHTML=
+    `<span style="color:#a1a1a6">頂部直徑</span> ${(topR*2).toFixed(0)} mm <span style="color:#636366">半徑${topR}</span><br>`+
+    `<span style="color:#a1a1a6">底部直徑</span> ${(botR*2).toFixed(0)} mm <span style="color:#636366">半徑${botR}</span><br>`+
+    `<span style="color:#a1a1a6">高度</span> ${h.toFixed(0)} mm`+
+    (hollow?`<br><span style="color:#a1a1a6">壁厚</span> ${wallT} mm`:'')+
+    (numRibs>0?`<br><span style="color:#a1a1a6">螺旋</span> ${numRibs} 條 ${twist}°`:'')+
+    (isOpenArc()?`<br><span style="color:#a1a1a6">展開</span> ${P.arcSpan}° 弧面`:'')+
+    (P.texType&&P.texType!=='none'?`<br><span style="color:#a1a1a6">紋理</span> ${texName(P.texType)}`:'');
+}
+
+// ══════════════════════════════════
+// UI HANDLERS
+// ══════════════════════════════════
+let regenTimer=null;
+function schedRegen(){clearTimeout(regenTimer);regenTimer=setTimeout(upload,20);}
+function hexRGB(h){return[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16)/255,parseInt(h.slice(5,7),16)/255];}
+
+// ══════════════════════════════════
+// UNDO / REDO HISTORY
+// ══════════════════════════════════
+const MAX_HIST=50;
+const hist=[];
+let histIdx=-1;
+
+function cloneState(){
+  return{...P,baseCol:[...P.baseCol],profilePts:P.profilePts.map(pt=>({...pt})),envPts:P.envPts.map(pt=>({...pt}))};
+}
+function pushHistory(){
+  hist.splice(histIdx+1); // discard any forward history
+  hist.push(cloneState());
+  if(hist.length>MAX_HIST){hist.shift();}
+  histIdx=hist.length-1;
+  refreshUndoBtns();
+}
+function refreshUndoBtns(){
+  document.getElementById('undoBtn').disabled=(histIdx<=0);
+  document.getElementById('redoBtn').disabled=(histIdx>=hist.length-1);
+}
+function applySnap(snap){
+  Object.assign(P,snap,{baseCol:[...snap.baseCol],profilePts:snap.profilePts.map(pt=>({...pt})),envPts:(snap.envPts||DEF_ENV).map(pt=>({...pt}))});
+  restoreUI(P);
+  refreshUndoBtns();
+}
+document.getElementById('undoBtn').addEventListener('click',()=>{
+  if(histIdx<=0)return;
+  histIdx--;
+  applySnap(hist[histIdx]);
+});
+document.getElementById('redoBtn').addEventListener('click',()=>{
+  if(histIdx>=hist.length-1)return;
+  histIdx++;
+  applySnap(hist[histIdx]);
+});
+window.addEventListener('keydown',e=>{
+  if(e.target.tagName==='INPUT'&&e.target.type!=='range')return;
+  if((e.ctrlKey||e.metaKey)&&!e.shiftKey&&e.key.toLowerCase()==='z'){
+    e.preventDefault();document.getElementById('undoBtn').click();
+  }
+  if((e.ctrlKey||e.metaKey)&&(e.key.toLowerCase()==='y'||(e.shiftKey&&e.key.toLowerCase()==='z'))){
+    e.preventDefault();document.getElementById('redoBtn').click();
+  }
+});
+// Push history when any range slider is about to be dragged
+document.addEventListener('mousedown',e=>{
+  if(e.target.type==='range')pushHistory();
+},true);
+document.addEventListener('touchstart',e=>{
+  if(e.target.type==='range')pushHistory();
+},{capture:true,passive:true});
+
+// ══════════════════════════════════
+// PROFILE CURVE EDITOR
+// ══════════════════════════════════
+const pCvs=document.getElementById('profileCvs');
+const pCtx=pCvs.getContext('2d');
+const PPAD=22;
+let draggingPt=-1;
+
+function profileMaxR(){
+  return Math.max(30,...P.profilePts.map(p=>isFinite(p.r)&&p.r>0?p.r:0))*1.22;
+}
+function ptToXY(pt){
+  const w=pCvs.width,h=pCvs.height,mR=profileMaxR();
+  return{x:PPAD+(pt.r/mR)*(w-2*PPAD), y:h-PPAD-pt.v*(h-2*PPAD)};
+}
+function xyToPt(x,y){
+  const w=pCvs.width,h=pCvs.height,mR=profileMaxR();
+  return{
+    r:Math.max(0,Math.round((x-PPAD)/(w-2*PPAD)*mR)),
+    v:Math.max(0,Math.min(1,(h-PPAD-y)/(h-2*PPAD)))
+  };
+}
+function getPtIdx(x,y){
+  const pts=P.profilePts;
+  for(let i=0;i<pts.length;i++){
+    const c=ptToXY(pts[i]);
+    if(Math.hypot(x-c.x,y-c.y)<14)return i;
+  }
+  return -1;
+}
+function getCvsXY(e){
+  const rect=pCvs.getBoundingClientRect();
+  const sx=pCvs.width/rect.width,sy=pCvs.height/rect.height;
+  const src=e.touches?e.touches[0]:e;
+  return{x:(src.clientX-rect.left)*sx,y:(src.clientY-rect.top)*sy};
+}
+
+function drawProfileEditor(){
+  if(!pCvs.offsetParent&&document.getElementById('custom-opts').style.display==='none')return;
+  const w=pCvs.width,h=pCvs.height,pts=P.profilePts;
+  pCtx.clearRect(0,0,w,h);
+  // Background
+  pCtx.fillStyle='#161617';pCtx.fillRect(0,0,w,h);
+  // Height tick labels
+  pCtx.fillStyle='#2c2c2e';pCtx.font='8px system-ui';
+  for(const pct of[0.25,0.5,0.75]){
+    const y=h-PPAD-pct*(h-2*PPAD);
+    pCtx.fillStyle='#2c2c2e';
+    pCtx.fillRect(PPAD,y,w-PPAD-8,1);
+    pCtx.fillStyle='#8e8e93';
+    pCtx.fillText(Math.round(pct*100)+'%',w-20,y+3);
+  }
+  // Center axis
+  pCtx.strokeStyle='#2c2c2e';pCtx.lineWidth=1;
+  pCtx.setLineDash([4,3]);
+  pCtx.beginPath();pCtx.moveTo(PPAD,PPAD-4);pCtx.lineTo(PPAD,h-PPAD+4);pCtx.stroke();
+  pCtx.setLineDash([]);
+  if(pts.length<2){
+    // Draw dots only
+    pts.forEach(pt=>{const c=ptToXY(pt);pCtx.beginPath();pCtx.arc(c.x,c.y,6,0,Math.PI*2);pCtx.fillStyle='#0a84ff';pCtx.fill();});
+    return;
+  }
+  // Smooth curve via Catmull-Rom
+  const NS=120,cPts=[];
+  for(let i=0;i<=NS;i++){const v=i/NS;cPts.push(ptToXY({v,r:catmullRomR(v,pts)}));}
+  // Fill silhouette
+  pCtx.beginPath();
+  pCtx.moveTo(PPAD,cPts[0].y);
+  cPts.forEach(p=>pCtx.lineTo(p.x,p.y));
+  pCtx.lineTo(PPAD,cPts[NS].y);pCtx.closePath();
+  pCtx.fillStyle='rgba(10,132,255,0.16)';pCtx.fill();
+  // Curve
+  pCtx.beginPath();pCtx.moveTo(cPts[0].x,cPts[0].y);
+  cPts.forEach(p=>pCtx.lineTo(p.x,p.y));
+  pCtx.strokeStyle='#0a84ff';pCtx.lineWidth=2;pCtx.stroke();
+  // Handle lines
+  pCtx.strokeStyle='#48484a';pCtx.lineWidth=1;pCtx.setLineDash([3,3]);
+  pCtx.beginPath();
+  pts.forEach((pt,i)=>{const c=ptToXY(pt);i===0?pCtx.moveTo(c.x,c.y):pCtx.lineTo(c.x,c.y);});
+  pCtx.stroke();pCtx.setLineDash([]);
+  // Control points
+  pts.forEach((pt,i)=>{
+    const c=ptToXY(pt);
+    const isEnd=(i===0||i===pts.length-1);
+    const hot=(draggingPt===i);
+    pCtx.beginPath();pCtx.arc(c.x,c.y,isEnd?7:5.5,0,Math.PI*2);
+    pCtx.fillStyle=hot?'#64b5ff':(isEnd?'#0a84ff':'#409cff');pCtx.fill();
+    pCtx.strokeStyle=hot?'#fff':'#ffffff';pCtx.lineWidth=1.5;pCtx.stroke();
+    // Label: show r value
+    pCtx.fillStyle='#a1a1a6';pCtx.font='9px system-ui';
+    const lbl=Math.round(pt.r)+'mm';
+    const lx=c.x+10,ly=c.y+3;
+    pCtx.fillText(lbl,lx>w-34?c.x-8-pCtx.measureText(lbl).width:lx,ly);
+  });
+}
+
+// Mouse events
+pCvs.addEventListener('mousedown',e=>{
+  const{x,y}=getCvsXY(e);draggingPt=getPtIdx(x,y);
+  if(draggingPt>=0){pushHistory();e.preventDefault();}
+});
+window.addEventListener('mousemove',e=>{
+  if(draggingPt<0)return;
+  const{x,y}=getCvsXY(e),pt=xyToPt(x,y),pts=P.profilePts;
+  const isEnd=(draggingPt===0||draggingPt===pts.length-1);
+  pts[draggingPt].r=pt.r;
+  if(!isEnd){
+    pts[draggingPt].v=Math.max(pts[draggingPt-1].v+0.02,Math.min(pts[draggingPt+1].v-0.02,pt.v));
+  }
+  // Sync topR/botR from endpoints
+  if(draggingPt===pts.length-1){P.topR=pt.r;syncTopRDisplay();syncAngleDisplay();}
+  if(draggingPt===0){P.botR=pt.r;document.getElementById('botR').value=pt.r;document.getElementById('v-botR').textContent=pt.r+' mm';syncAngleDisplay();}
+  drawProfileEditor();schedRegen();e.preventDefault();
+});
+window.addEventListener('mouseup',()=>{draggingPt=-1;});
+// Touch events
+pCvs.addEventListener('touchstart',e=>{const{x,y}=getCvsXY(e);draggingPt=getPtIdx(x,y);if(draggingPt>=0){pushHistory();e.preventDefault();}},{passive:false});
+pCvs.addEventListener('touchmove',e=>{
+  if(draggingPt<0)return;
+  const{x,y}=getCvsXY(e),pt=xyToPt(x,y),pts=P.profilePts;
+  const isEnd=(draggingPt===0||draggingPt===pts.length-1);
+  pts[draggingPt].r=pt.r;
+  if(!isEnd)pts[draggingPt].v=Math.max(pts[draggingPt-1].v+0.02,Math.min(pts[draggingPt+1].v-0.02,pt.v));
+  if(draggingPt===pts.length-1){P.topR=pt.r;syncTopRDisplay();syncAngleDisplay();}
+  if(draggingPt===0){P.botR=pt.r;document.getElementById('botR').value=pt.r;document.getElementById('v-botR').textContent=pt.r+' mm';syncAngleDisplay();}
+  drawProfileEditor();schedRegen();e.preventDefault();
+},{passive:false});
+pCvs.addEventListener('touchend',()=>{draggingPt=-1;});
+// Double-click to delete middle point
+pCvs.addEventListener('dblclick',e=>{
+  const{x,y}=getCvsXY(e),idx=getPtIdx(x,y);
+  if(idx>0&&idx<P.profilePts.length-1){pushHistory();P.profilePts.splice(idx,1);drawProfileEditor();schedRegen();}
+});
+// Add point: insert between the two points with the largest gap
+document.getElementById('addPtBtn').addEventListener('click',()=>{
+  pushHistory();
+  const pts=P.profilePts;
+  let bestI=0,bestGap=0;
+  for(let i=0;i<pts.length-1;i++){const g=pts[i+1].v-pts[i].v;if(g>bestGap){bestGap=g;bestI=i;}}
+  const p1=pts[bestI],p2=pts[bestI+1];
+  const nv=(p1.v+p2.v)/2;
+  // Use linear interpolation always — avoids any Catmull-Rom overshoot on the freshly added point
+  const r1=isFinite(p1.r)&&p1.r>0?p1.r:1;
+  const r2=isFinite(p2.r)&&p2.r>0?p2.r:1;
+  const safeR=Math.max(1,Math.round((r1+r2)/2));
+  pts.splice(bestI+1,0,{v:nv,r:safeR});
+  try{drawProfileEditor();}catch(err){console.warn('drawProfileEditor:',err);}
+  upload(); // call directly — no setTimeout race condition
+});
+// Clear all middle points
+document.getElementById('clearPtsBtn').addEventListener('click',()=>{
+  pushHistory();
+  const pts=P.profilePts;
+  // Create fresh objects — not references into the old array
+  P.profilePts=[{v:pts[0].v,r:pts[0].r},{v:pts[pts.length-1].v,r:pts[pts.length-1].r}];
+  try{drawProfileEditor();}catch(err){console.warn('drawProfileEditor:',err);}
+  upload(); // call directly — no setTimeout race condition
+});
+
+// ══════════════════════════════════
+// TEXTURE ENVELOPE CURVE EDITOR
+// ══════════════════════════════════
+const eCvs=document.getElementById('envCvs');
+const eCtx=eCvs.getContext('2d');
+const EPAD=22;
+let draggingEnvPt=-1;
+
+function envPtToXY(pt){
+  const w=eCvs.width,h=eCvs.height;
+  return{x:EPAD+(pt.m/2)*(w-2*EPAD), y:h-EPAD-pt.v*(h-2*EPAD)};
+}
+function envXYToPt(x,y){
+  const w=eCvs.width,h=eCvs.height;
+  return{m:Math.max(0,Math.min(2,(x-EPAD)/(w-2*EPAD)*2)), v:Math.max(0,Math.min(1,(h-EPAD-y)/(h-2*EPAD)))};
+}
+function getEnvPtIdx(x,y){
+  for(let i=0;i<P.envPts.length;i++){
+    const c=envPtToXY(P.envPts[i]);if(Math.hypot(x-c.x,y-c.y)<14)return i;
+  }return -1;
+}
+function getEnvCvsXY(e){
+  const rect=eCvs.getBoundingClientRect();
+  const sx=eCvs.width/rect.width,sy=eCvs.height/rect.height;
+  const src=e.touches?e.touches[0]:e;
+  return{x:(src.clientX-rect.left)*sx,y:(src.clientY-rect.top)*sy};
+}
+function drawEnvEditor(){
+  const w=eCvs.width,h=eCvs.height,pts=P.envPts;
+  eCtx.clearRect(0,0,w,h);
+  eCtx.fillStyle='#161617';eCtx.fillRect(0,0,w,h);
+  // Horizontal gridlines
+  eCtx.font='8px system-ui';
+  for(const pct of[0.25,0.5,0.75]){
+    const y=h-EPAD-pct*(h-2*EPAD);
+    eCtx.fillStyle='#2c2c2e';eCtx.fillRect(EPAD,y,w-2*EPAD,1);
+    eCtx.fillStyle='#8e8e93';eCtx.fillText(Math.round(pct*100)+'%',w-EPAD+2,y+3);
+  }
+  // x=1.0 neutral dashed line
+  const xN=EPAD+0.5*(w-2*EPAD);
+  eCtx.strokeStyle='#48484a';eCtx.lineWidth=1;eCtx.setLineDash([4,3]);
+  eCtx.beginPath();eCtx.moveTo(xN,EPAD-4);eCtx.lineTo(xN,h-EPAD+4);eCtx.stroke();
+  eCtx.setLineDash([]);
+  eCtx.fillStyle='#8e8e93';eCtx.font='8px system-ui';
+  eCtx.fillText('0×',EPAD-2,h-EPAD+11);
+  eCtx.fillText('1×',xN-6,EPAD-4);
+  eCtx.fillText('2×',w-EPAD-4,h-EPAD+11);
+  if(pts.length<2)return;
+  // Smooth envelope curve
+  const NS=120,cPts=[];
+  for(let i=0;i<=NS;i++){const v=i/NS;cPts.push(envPtToXY({v,m:catmullRomEnv(v,pts)}));}
+  // Fill area between neutral line and curve
+  eCtx.beginPath();eCtx.moveTo(xN,cPts[0].y);
+  cPts.forEach(p=>eCtx.lineTo(p.x,p.y));
+  eCtx.lineTo(xN,cPts[NS].y);eCtx.closePath();
+  eCtx.fillStyle='rgba(180,130,50,0.12)';eCtx.fill();
+  // Curve
+  eCtx.beginPath();eCtx.moveTo(cPts[0].x,cPts[0].y);
+  cPts.forEach(p=>eCtx.lineTo(p.x,p.y));
+  eCtx.strokeStyle='#c89040';eCtx.lineWidth=2;eCtx.stroke();
+  // Control points
+  pts.forEach((pt,i)=>{
+    const c=envPtToXY(pt);
+    const isEnd=(i===0||i===pts.length-1);
+    const hot=(draggingEnvPt===i);
+    eCtx.beginPath();eCtx.arc(c.x,c.y,isEnd?7:5.5,0,Math.PI*2);
+    eCtx.fillStyle=hot?'#ffe080':(isEnd?'#c89040':'#e0b060');eCtx.fill();
+    eCtx.strokeStyle=hot?'#fff':'#ffd090';eCtx.lineWidth=1.5;eCtx.stroke();
+    eCtx.fillStyle='#907040';eCtx.font='9px system-ui';
+    const lbl=(+pt.m.toFixed(2))+'×';
+    eCtx.fillText(lbl,c.x+(c.x<w/2?9:-9-eCtx.measureText(lbl).width),c.y+3);
+  });
+}
+eCvs.addEventListener('mousedown',e=>{
+  const{x,y}=getEnvCvsXY(e);draggingEnvPt=getEnvPtIdx(x,y);
+  if(draggingEnvPt>=0){pushHistory();e.preventDefault();}
+});
+window.addEventListener('mousemove',e=>{
+  if(draggingEnvPt<0)return;
+  const{x,y}=getEnvCvsXY(e),pt=envXYToPt(x,y),pts=P.envPts;
+  const isEnd=(draggingEnvPt===0||draggingEnvPt===pts.length-1);
+  pts[draggingEnvPt].m=pt.m;
+  if(!isEnd)pts[draggingEnvPt].v=Math.max(pts[draggingEnvPt-1].v+0.02,Math.min(pts[draggingEnvPt+1].v-0.02,pt.v));
+  drawEnvEditor();schedRegen();e.preventDefault();
+});
+window.addEventListener('mouseup',()=>{if(draggingEnvPt>=0){draggingEnvPt=-1;}});
+eCvs.addEventListener('touchstart',e=>{const{x,y}=getEnvCvsXY(e);draggingEnvPt=getEnvPtIdx(x,y);if(draggingEnvPt>=0){pushHistory();e.preventDefault();}},{passive:false});
+eCvs.addEventListener('touchmove',e=>{
+  if(draggingEnvPt<0)return;
+  const{x,y}=getEnvCvsXY(e),pt=envXYToPt(x,y),pts=P.envPts;
+  const isEnd=(draggingEnvPt===0||draggingEnvPt===pts.length-1);
+  pts[draggingEnvPt].m=pt.m;
+  if(!isEnd)pts[draggingEnvPt].v=Math.max(pts[draggingEnvPt-1].v+0.02,Math.min(pts[draggingEnvPt+1].v-0.02,pt.v));
+  drawEnvEditor();schedRegen();e.preventDefault();
+},{passive:false});
+eCvs.addEventListener('touchend',()=>{draggingEnvPt=-1;});
+eCvs.addEventListener('dblclick',e=>{
+  const{x,y}=getEnvCvsXY(e),idx=getEnvPtIdx(x,y);
+  if(idx>0&&idx<P.envPts.length-1){pushHistory();P.envPts.splice(idx,1);drawEnvEditor();schedRegen();}
+});
+// ── Flip vertical ──
+document.getElementById('flipVBtn').addEventListener('click',()=>{
+  pushHistory();
+  // Swap top/bot radii
+  [P.topR,P.botR]=[P.botR,P.topR];
+  // Invert bulge position
+  P.bulgePos=1-P.bulgePos;
+  // Toggle rib2 origin
+  P.rib2FromTop=!P.rib2FromTop;
+  // Invert profile points v and re-sort
+  P.profilePts.forEach(pt=>{pt.v=1-pt.v;});
+  P.profilePts.sort((a,b)=>a.v-b.v);
+  // Invert envelope points v and re-sort
+  P.envPts.forEach(pt=>{pt.v=1-pt.v;});
+  P.envPts.sort((a,b)=>a.v-b.v);
+  restoreUI(P);
+  schedRegen();
+});
+
+document.getElementById('addEnvPtBtn').addEventListener('click',()=>{
+  pushHistory();
+  const pts=P.envPts;
+  let bestI=0,bestGap=0;
+  for(let i=0;i<pts.length-1;i++){const g=pts[i+1].v-pts[i].v;if(g>bestGap){bestGap=g;bestI=i;}}
+  const midV=(pts[bestI].v+pts[bestI+1].v)/2;
+  const midM=(pts[bestI].m+pts[bestI+1].m)/2;
+  pts.splice(bestI+1,0,{v:midV,m:midM});
+  drawEnvEditor();schedRegen();
+});
+document.getElementById('clearEnvBtn').addEventListener('click',()=>{
+  pushHistory();P.envPts=[{v:0,m:1},{v:1,m:1}];drawEnvEditor();schedRegen();
+});
+setTimeout(drawEnvEditor,60);
+
+// Shape buttons
+document.querySelectorAll('.shape-btn').forEach(btn=>{
+  btn.addEventListener('click',function(){
+    pushHistory();
+    document.querySelectorAll('.shape-btn').forEach(b=>b.classList.remove('active'));
+    this.classList.add('active');P.shape=this.dataset.shape;
+    const isCustom=(P.shape==='custom'||P.shape==='belly');
+    document.getElementById('custom-opts').style.display=isCustom?'block':'none';
+    if(isCustom){
+      // Sync profilePts endpoints with current topR/botR
+      P.profilePts[0].r=P.botR;
+      P.profilePts[P.profilePts.length-1].r=P.topR;
+      setTimeout(drawProfileEditor,10);
+    }
+    schedRegen();
+  });
+});
+
+// Helpers for keeping angle ↔ topR in sync
+function syncAngleDisplay(){
+  const a=angleFromDims();
+  P.coneAngle=a;
+  document.getElementById('coneAngle').value=a;
+  document.getElementById('v-coneAngle').textContent=a+'°';
+}
+function syncTopRDisplay(){
+  document.getElementById('topR').value=P.topR;
+  document.getElementById('v-topR').textContent=P.topR+' mm';
+}
+function rib2LenMM(){return Math.round(P.rib2Len/100*P.h);}
+
+// Sliders
+[
+  {id:'topR',  key:'topR',  fmt:v=>`${v} mm`, after:()=>{syncAngleDisplay();if(P.shape==='custom'||P.shape==='belly'){P.profilePts[P.profilePts.length-1].r=P.topR;drawProfileEditor();}}},
+  {id:'botR',  key:'botR',  fmt:v=>`${v} mm`, after:()=>{syncAngleDisplay();if(P.shape==='custom'||P.shape==='belly'){P.profilePts[0].r=P.botR;drawProfileEditor();}}},
+  {id:'hgt',   key:'h',     fmt:v=>`${v} mm`, after:()=>{syncAngleDisplay();document.getElementById('v-rib2Len').textContent=rib2LenMM()+' mm';}},
+  {id:'wallT', key:'wallT', fmt:v=>`${(+v).toFixed(1)} mm`},
+  {id:'numRibs',key:'numRibs',fmt:v=>`${v} 條`},
+  {id:'twist', key:'twist', fmt:v=>`${v}°`},
+  {id:'ribH',  key:'ribH',  fmt:v=>`${+v>=0?'+':''}${(+v).toFixed(1)} mm`},
+  {id:'ribS',  key:'ribS',  fmt:v=>`${v}`},
+  {id:'rib2H', key:'rib2H', fmt:v=>`${+v>=0?'+':''}${(+v).toFixed(1)} mm`},
+  {id:'numVert',key:'numVert',fmt:v=>`${v} 條`},
+  {id:'vertH', key:'vertH', fmt:v=>`${+v>=0?'+':''}${(+v).toFixed(1)} mm`},
+  {id:'vertS', key:'vertS', fmt:v=>`${v}`},
+  {id:'numHoriz',key:'numHoriz',fmt:v=>`${v} 條`},
+  {id:'horizH', key:'horizH', fmt:v=>`${+v>=0?'+':''}${(+v).toFixed(1)} mm`},
+  {id:'horizS', key:'horizS', fmt:v=>`${v}`},
+  // Organic crumple
+  {id:'crumple',    key:'crumple',    fmt:v=>`${(+v).toFixed(1)} mm`},
+  {id:'crumpleFreqA',key:'crumpleFreqA',fmt:v=>`${v}`},
+  {id:'crumpleFreqV',key:'crumpleFreqV',fmt:v=>`${(+v).toFixed(1)}`},
+  {id:'crumpleTwist',key:'crumpleTwist',fmt:v=>`${v}°`},
+  {id:'crumpleOct', key:'crumpleOct', fmt:v=>`${v}`},
+  // Profile bulge
+  {id:'bulge',    key:'bulge',    fmt:v=>`${+v>=0?'+':''}${v} mm`},
+  {id:'bulgePos', key:'bulgePos', fmt:v=>`${Math.round(v*100)}%`},
+  // Hex bump
+  {id:'bumpH',    key:'bumpH',    fmt:v=>`${+v>=0?'+':''}${(+v).toFixed(1)} mm`},
+  {id:'bumpFreqA',key:'bumpFreqA',fmt:v=>`${v}`},
+  {id:'bumpFreqV',key:'bumpFreqV',fmt:v=>`${v}`},
+  {id:'bumpS',    key:'bumpS',    fmt:v=>`${(+v).toFixed(1)}`},
+  {id:'bumpCount',key:'bumpCount',fmt:v=>`${v}`,after:()=>{rebuildBumpCenters();}},
+  {id:'bumpSeed', key:'bumpSeed', fmt:v=>`${v}`,after:()=>{rebuildBumpCenters();}},
+  // Cross-section lobes
+  {id:'lobeN',   key:'lobeN',   fmt:v=>`${v}`},
+  {id:'lobeAmp', key:'lobeAmp', fmt:v=>`${+v>=0?'+':''}${(+v).toFixed(1)} mm`},
+  {id:'lobeTwist',key:'lobeTwist',fmt:v=>`${v}°`},
+  // Stacked rings
+  {id:'stackN',     key:'stackN',     fmt:v=>`${v}`},
+  {id:'stackAmp',   key:'stackAmp',   fmt:v=>`${+v>=0?'+':''}${(+v).toFixed(1)} mm`},
+  {id:'stackOffset',  key:'stackOffset',  fmt:v=>`${(+v).toFixed(1)} mm`},
+  // Axis bend
+  {id:'axisBend',     key:'axisBend',     fmt:v=>`${v} mm`},
+  {id:'axisBendFreq', key:'axisBendFreq', fmt:v=>`${(+v).toFixed(2)}×`},
+  {id:'axisBendPhase',key:'axisBendPhase',fmt:v=>`${v}°`},
+  {id:'axisTwist',    key:'axisTwist',    fmt:v=>`${v}°`},
+  {id:'axisBulge',    key:'axisBulge',    fmt:v=>`${v} mm`},
+  // Rim chamfer
+  {id:'rimR',    key:'rimR',    fmt:v=>`${(+v).toFixed(1)} mm`},
+  // Disp map
+  {id:'dispH',   key:'dispH',   fmt:v=>`${+v>=0?'+':''}${(+v).toFixed(1)} mm`},
+  {id:'dispTileX',key:'dispTileX',fmt:v=>`×${v}`},
+  {id:'dispTileV',key:'dispTileV',fmt:v=>`×${v}`},
+  // Arc span + texture lexicon
+  {id:'arcSpan', key:'arcSpan', fmt:v=>`${v}°`},
+  {id:'texAmp',  key:'texAmp',  fmt:v=>`${+v>=0?'+':''}${(+v).toFixed(1)} mm`},
+  {id:'texScale',key:'texScale',fmt:v=>`${(+v).toFixed(1)} mm`},
+  {id:'texRough',key:'texRough',fmt:v=>`${v}%`,after:()=>{if(P.texType==='custom')rasterCustomTex();}},
+  {id:'slabW',key:'slabW',fmt:v=>`${v} mm`},
+  {id:'texAngle',key:'texAngle',fmt:v=>`${v}°`},
+  {id:'texSeed', key:'texSeed', fmt:v=>`${v}`},
+  {id:'lightA',key:'lightA',fmt:v=>`${v}°`},
+  {id:'lightI',key:'lightI',fmt:v=>`${v}%`},
+  {id:'grad',  key:'gradAmt',fmt:v=>`${v}%`},
+].forEach(({id,key,fmt,after})=>{
+  const el=document.getElementById(id);
+  const vEl=document.getElementById('v-'+id);
+  if(!el)return;
+  el.addEventListener('input',function(){
+    const v=+this.value;
+    if(key==='gradAmt')P[key]=v/100;
+    else if(key==='lightI'||key==='texRough')P[key]=v/100;
+    else P[key]=v;
+    if(vEl)vEl.textContent=fmt(v);
+    if(after)after();
+    schedRegen();
+  });
+  // Set initial display
+  const v=+el.value;
+  if(vEl)vEl.textContent=fmt(v);
+});
+
+// Cone angle slider — changes topR to match
+document.getElementById('coneAngle').addEventListener('input',function(){
+  const deg=+this.value;
+  P.coneAngle=deg;
+  document.getElementById('v-coneAngle').textContent=deg+'°';
+  P.topR=topRFromAngle(deg);
+  syncTopRDisplay();
+  schedRegen();
+});
+
+// rib2Len slider — show mm height
+document.getElementById('rib2Len').addEventListener('input',function(){
+  P.rib2Len=+this.value;
+  document.getElementById('v-rib2Len').textContent=rib2LenMM()+' mm';
+  schedRegen();
+});
+// init rib2Len display
+document.getElementById('v-rib2Len').textContent=rib2LenMM()+' mm';
+
+// Hollow toggle
+document.getElementById('hollow').addEventListener('change',function(){
+  pushHistory();
+  P.hollow=this.checked;
+  document.getElementById('hollow-opts').classList.toggle('show',this.checked);
+  schedRegen();
+});
+
+// Seal bottom toggle
+document.getElementById('sealBot').addEventListener('change',function(){
+  pushHistory();
+  P.sealBot=this.checked;
+  schedRegen();
+});
+
+// Secondary spiral toggle
+document.getElementById('rib2').addEventListener('change',function(){
+  pushHistory();
+  P.rib2=this.checked;
+  document.getElementById('rib2-opts').style.display=this.checked?'block':'none';
+  schedRegen();
+});
+
+// Secondary spiral direction (from bottom / from top)
+document.getElementById('rib2DirBot').addEventListener('click',function(){
+  pushHistory();
+  P.rib2FromTop=false;
+  this.classList.add('active');document.getElementById('rib2DirTop').classList.remove('active');
+  schedRegen();
+});
+document.getElementById('rib2DirTop').addEventListener('click',function(){
+  pushHistory();
+  P.rib2FromTop=true;
+  this.classList.add('active');document.getElementById('rib2DirBot').classList.remove('active');
+  schedRegen();
+});
+
+// Rib profile buttons (圓弧 / 銳脊)
+document.querySelectorAll('#ribProfileRow .mode-btn').forEach(btn=>{
+  btn.addEventListener('click',function(){
+    pushHistory();
+    P.ribProfile=+this.dataset.rp;
+    document.querySelectorAll('#ribProfileRow .mode-btn').forEach(b=>b.classList.remove('active'));
+    this.classList.add('active');
+    mesh=null; schedRegen();
+  });
+});
+
+// Bump orientation buttons (水平 / 垂直 / 交叉)
+document.querySelectorAll('#bumpOrientRow .mode-btn').forEach(btn=>{
+  btn.addEventListener('click',function(){
+    pushHistory();
+    P.bumpOrient=+this.dataset.orient;
+    document.querySelectorAll('#bumpOrientRow .mode-btn').forEach(b=>b.classList.remove('active'));
+    this.classList.add('active');
+    schedRegen();
+  });
+});
+
+// Random bump toggle
+document.getElementById('bumpRandom').addEventListener('change',function(){
+  pushHistory();
+  P.bumpRandom=this.checked;
+  document.getElementById('bump-rand-opts').style.display=this.checked?'block':'none';
+  document.getElementById('bump-grid-opts').style.display=this.checked?'none':'block';
+  if(this.checked)rebuildBumpCenters();
+  schedRegen();
+});
+document.getElementById('bumpRerollBtn').addEventListener('click',function(){
+  pushHistory();
+  P.bumpSeed=Math.floor(Math.random()*999)+1;
+  document.getElementById('bumpSeed').value=P.bumpSeed;
+  document.getElementById('v-bumpSeed').textContent=P.bumpSeed;
+  rebuildBumpCenters();
+  schedRegen();
+});
+
+// ── Displacement map handlers ───────────────────────────────────────
+document.getElementById('dispFileInput').addEventListener('change',function(){
+  if(this.files[0])loadDispMap(this.files[0]);
+  this.value='';
+});
+document.getElementById('dispClearBtn').addEventListener('click',function(){
+  _dispPixels=null; _dispW=0; _dispH=0;
+  const thumb=document.getElementById('dispThumb');
+  thumb.style.display='none'; thumb.style.backgroundImage='none';
+  this.style.display='none';
+  document.getElementById('dispH').disabled=true;
+  P.dispH=0;
+  document.getElementById('dispH').value=0;
+  document.getElementById('v-dispH').textContent='0 mm';
+  schedRegen();
+});
+document.getElementById('dispInvert').addEventListener('change',function(){
+  pushHistory(); P.dispInvert=this.checked; schedRegen();
+});
+document.getElementById('dispEnv').addEventListener('change',function(){
+  pushHistory(); P.dispEnv=this.checked; schedRegen();
+});
+
+// Mesh quality buttons
+const _meshQHints=['64×36（快速草稿）','128×72（適合一般預覽）','192×108（高品質預覽）','256×144（超高精細，較慢）'];
+document.querySelectorAll('.meshq-btn').forEach(btn=>{
+  btn.addEventListener('click',function(){
+    const q=+this.dataset.q;
+    setMeshQuality(q);
+    document.querySelectorAll('.meshq-btn').forEach(b=>b.classList.remove('active'));
+    this.classList.add('active');
+    document.getElementById('meshQ-hint').textContent=_meshQHints[q-1]||'';
+    mesh=null; schedRegen();
+  });
+});
+
+// Rim chamfer (R-corner)
+document.getElementById('rimRBot').addEventListener('change',function(){pushHistory();P.rimRBot=this.checked;schedRegen();});
+document.getElementById('rimRTop').addEventListener('change',function(){pushHistory();P.rimRTop=this.checked;schedRegen();});
+
+// Smooth preview toggle
+document.getElementById('smoothToggle').addEventListener('change',function(){
+  smoothPreview=this.checked;
+  document.getElementById('smooth-hint').style.display=this.checked?'block':'none';
+  upload();
+});
+
+// Color
+document.getElementById('baseCol').addEventListener('input',function(){P.baseCol=hexRGB(this.value);});
+
+// Direction
+document.getElementById('dirCW').addEventListener('click',function(){
+  pushHistory();
+  P.cw=true;this.classList.add('active');document.getElementById('dirCCW').classList.remove('active');schedRegen();
+});
+document.getElementById('dirCCW').addEventListener('click',function(){
+  pushHistory();
+  P.cw=false;this.classList.add('active');document.getElementById('dirCW').classList.remove('active');schedRegen();
+});
+
+// Mode
+document.querySelectorAll('.mode-btn').forEach(btn=>{
+  btn.addEventListener('click',function(){
+    if(this.classList.contains('view-btn'))return; // view presets handle themselves
+    if(!this.hasAttribute('data-mode'))return;     // skip buttons sharing mode-btn class but no data-mode
+    document.querySelectorAll('.mode-btn[data-mode]:not(.view-btn)').forEach(b=>b.classList.remove('active'));
+    this.classList.add('active');P.mode=+this.dataset.mode;
+  });
+});
+
+// Reset
+document.getElementById('resetBtn').addEventListener('click',()=>{
+  pushHistory();
+  Object.assign(P,DEF,{baseCol:[...DEF.baseCol],profilePts:cloneProfile(DEF_PROFILE)});
+  // Restore UI
+  document.getElementById('topR').value=DEF.topR; document.getElementById('v-topR').textContent=DEF.topR+' mm';
+  document.getElementById('botR').value=DEF.botR; document.getElementById('v-botR').textContent=DEF.botR+' mm';
+  document.getElementById('hgt').value=DEF.h;       document.getElementById('v-hgt').textContent=DEF.h+' mm';
+  document.getElementById('coneAngle').value=DEF.coneAngle; document.getElementById('v-coneAngle').textContent=DEF.coneAngle+'°';
+  document.getElementById('wallT').value=DEF.wallT; document.getElementById('v-wallT').textContent=DEF.wallT.toFixed(1)+' mm';
+  document.getElementById('numRibs').value=DEF.numRibs; document.getElementById('v-numRibs').textContent=DEF.numRibs+' 條';
+  document.getElementById('twist').value=DEF.twist; document.getElementById('v-twist').textContent=DEF.twist+'°';
+  document.getElementById('ribH').value=DEF.ribH;   document.getElementById('v-ribH').textContent=DEF.ribH.toFixed(1)+' mm';
+  document.getElementById('ribS').value=DEF.ribS;   document.getElementById('v-ribS').textContent=DEF.ribS;
+  document.getElementById('lightA').value=DEF.lightA; document.getElementById('v-lightA').textContent=DEF.lightA+'°';
+  document.getElementById('lightI').value=Math.round(DEF.lightI*100); document.getElementById('v-lightI').textContent=Math.round(DEF.lightI*100)+'%';
+  document.getElementById('grad').value=Math.round(DEF.gradAmt*100); document.getElementById('v-grad').textContent=Math.round(DEF.gradAmt*100)+'%';
+  document.getElementById('smoothToggle').checked=false;
+  document.getElementById('smooth-hint').style.display='none';
+  smoothPreview=false;
+  document.getElementById('baseCol').value='#c5a882';
+  document.getElementById('hollow').checked=false;
+  document.getElementById('hollow-opts').classList.remove('show');
+  document.getElementById('sealBot').checked=false;
+  document.getElementById('rib2').checked=false;
+  document.getElementById('rib2-opts').style.display='none';
+  document.getElementById('rib2H').value=DEF.rib2H; document.getElementById('v-rib2H').textContent='+'+DEF.rib2H.toFixed(1)+' mm';
+  document.getElementById('rib2Len').value=DEF.rib2Len; document.getElementById('v-rib2Len').textContent=Math.round(DEF.rib2Len/100*DEF.h)+' mm';
+  document.getElementById('rib2DirBot').classList.add('active'); document.getElementById('rib2DirTop').classList.remove('active');
+  document.getElementById('ribH').value=DEF.ribH; document.getElementById('v-ribH').textContent='+'+DEF.ribH.toFixed(1)+' mm';
+  document.getElementById('dirCW').classList.add('active');
+  document.getElementById('dirCCW').classList.remove('active');
+  document.querySelectorAll('.shape-btn').forEach(b=>{b.classList.remove('active');if(b.dataset.shape==='cone')b.classList.add('active');});
+  document.querySelectorAll('.mode-btn').forEach(b=>{b.classList.remove('active');if(b.dataset.mode==='0')b.classList.add('active');});
+  document.getElementById('custom-opts').style.display='none';
+  P.profilePts=cloneProfile(DEF_PROFILE);
+  document.getElementById('numVert').value=DEF.numVert; document.getElementById('v-numVert').textContent=DEF.numVert+' 條';
+  document.getElementById('vertH').value=DEF.vertH; document.getElementById('v-vertH').textContent='+'+DEF.vertH.toFixed(1)+' mm';
+  document.getElementById('vertS').value=DEF.vertS; document.getElementById('v-vertS').textContent=DEF.vertS;
+  document.getElementById('numHoriz').value=DEF.numHoriz; document.getElementById('v-numHoriz').textContent=DEF.numHoriz+' 條';
+  document.getElementById('horizH').value=DEF.horizH; document.getElementById('v-horizH').textContent='+'+DEF.horizH.toFixed(1)+' mm';
+  document.getElementById('horizS').value=DEF.horizS; document.getElementById('v-horizS').textContent=DEF.horizS;
+  document.getElementById('crumple').value=DEF.crumple; document.getElementById('v-crumple').textContent=DEF.crumple.toFixed(1)+' mm';
+  document.getElementById('crumpleFreqA').value=DEF.crumpleFreqA; document.getElementById('v-crumpleFreqA').textContent=DEF.crumpleFreqA;
+  document.getElementById('crumpleFreqV').value=DEF.crumpleFreqV; document.getElementById('v-crumpleFreqV').textContent=DEF.crumpleFreqV.toFixed(1);
+  document.getElementById('crumpleTwist').value=DEF.crumpleTwist; document.getElementById('v-crumpleTwist').textContent=DEF.crumpleTwist+'°';
+  document.getElementById('crumpleOct').value=DEF.crumpleOct; document.getElementById('v-crumpleOct').textContent=DEF.crumpleOct;
+  document.getElementById('bulge').value=DEF.bulge; document.getElementById('v-bulge').textContent=(DEF.bulge>=0?'+':'')+DEF.bulge+' mm';
+  document.getElementById('bulgePos').value=DEF.bulgePos; document.getElementById('v-bulgePos').textContent=Math.round(DEF.bulgePos*100)+'%';
+  document.getElementById('bumpH').value=DEF.bumpH; document.getElementById('v-bumpH').textContent=(DEF.bumpH>=0?'+':'')+DEF.bumpH.toFixed(1)+' mm';
+  document.getElementById('bumpFreqA').value=DEF.bumpFreqA; document.getElementById('v-bumpFreqA').textContent=DEF.bumpFreqA;
+  document.getElementById('bumpFreqV').value=DEF.bumpFreqV; document.getElementById('v-bumpFreqV').textContent=DEF.bumpFreqV;
+  document.getElementById('bumpS').value=DEF.bumpS; document.getElementById('v-bumpS').textContent=DEF.bumpS.toFixed(1);
+  document.getElementById('bumpRandom').checked=DEF.bumpRandom;
+  document.getElementById('bump-rand-opts').style.display=DEF.bumpRandom?'block':'none';
+  document.getElementById('bump-grid-opts').style.display=DEF.bumpRandom?'none':'block';
+  document.getElementById('bumpCount').value=DEF.bumpCount; document.getElementById('v-bumpCount').textContent=DEF.bumpCount;
+  document.getElementById('bumpSeed').value=DEF.bumpSeed; document.getElementById('v-bumpSeed').textContent=DEF.bumpSeed;
+  document.querySelectorAll('#bumpOrientRow .mode-btn').forEach(b=>b.classList.toggle('active',+b.dataset.orient===DEF.bumpOrient));
+  // Cross-section lobes
+  document.getElementById('lobeN').value=DEF.lobeN; document.getElementById('v-lobeN').textContent='0';
+  document.getElementById('lobeAmp').value=DEF.lobeAmp; document.getElementById('v-lobeAmp').textContent='0 mm';
+  document.getElementById('lobeTwist').value=DEF.lobeTwist; document.getElementById('v-lobeTwist').textContent='0°';
+  // Stacked rings
+  document.getElementById('stackN').value=DEF.stackN; document.getElementById('v-stackN').textContent='0';
+  document.getElementById('stackAmp').value=DEF.stackAmp; document.getElementById('v-stackAmp').textContent='+8.0 mm';
+  document.getElementById('stackOffset').value=DEF.stackOffset; document.getElementById('v-stackOffset').textContent='0 mm';
+  document.getElementById('axisBend').value=DEF.axisBend; document.getElementById('v-axisBend').textContent='0 mm';
+  document.getElementById('axisBendFreq').value=DEF.axisBendFreq; document.getElementById('v-axisBendFreq').textContent='1.00×';
+  document.getElementById('axisBendPhase').value=DEF.axisBendPhase; document.getElementById('v-axisBendPhase').textContent='0°';
+  document.getElementById('axisTwist').value=DEF.axisTwist; document.getElementById('v-axisTwist').textContent='0°';
+  document.getElementById('axisBulge').value=DEF.axisBulge; document.getElementById('v-axisBulge').textContent='0 mm';
+  // Rib profile
+  document.querySelectorAll('#ribProfileRow .mode-btn').forEach(b=>b.classList.toggle('active',+b.dataset.rp===DEF.ribProfile));
+  // Reset disp map params (image itself not cleared so user can re-adjust height)
+  document.getElementById('dispH').value=DEF.dispH; document.getElementById('v-dispH').textContent='0 mm';
+  document.getElementById('dispTileX').value=DEF.dispTileX; document.getElementById('v-dispTileX').textContent='×1';
+  document.getElementById('dispTileV').value=DEF.dispTileV; document.getElementById('v-dispTileV').textContent='×1';
+  document.getElementById('dispInvert').checked=DEF.dispInvert;
+  document.getElementById('dispEnv').checked=DEF.dispEnv;
+  document.getElementById('rimR').value=DEF.rimR; document.getElementById('v-rimR').textContent='0 mm';
+  document.getElementById('rimRBot').checked=DEF.rimRBot;
+  document.getElementById('rimRTop').checked=DEF.rimRTop;
+  P.envPts=[{v:0,m:1},{v:1,m:1}];
+  setTimeout(drawEnvEditor,10);
+  setActiveForm(null);
+  syncLexUI();
+  schedRegen();
+});
+
+// ══════════════════════════════════
+// SAVE SNAPSHOT (JPG + JSON)
+// ══════════════════════════════════
+document.getElementById('saveBtn').addEventListener('click',()=>{
+  const now=new Date();
+  const ts=now.toISOString().slice(0,16).replace('T','_').replace(':','-');
+  const base=`spiral_${P.shape}_${ts}`;
+
+  // 1. Screenshot JPG from WebGL canvas
+  const jpgDataURL=canvas.toDataURL('image/jpeg',0.93);
+  const a1=document.createElement('a');
+  a1.href=jpgDataURL;
+  a1.download=base+'.jpg';
+  a1.click();
+
+  // 2. JSON params (all settings needed to restore the design)
+  setTimeout(()=>{
+    const snap={
+      _version:1,
+      _saved:now.toISOString(),
+      _shape_label:{cone:'直錐',vcone:'弧錐',cylinder:'直筒',bowl:'碗形',belly:'自訂輪廓',custom:'自訂輪廓'}[P.shape]||P.shape,
+      ...P,
+      baseCol:[...P.baseCol],
+      _customTex:(P.texType==='custom'&&_ctSrc)?_ctSrc:undefined,
+      _customTexName:(P.texType==='custom'&&_ctSrc)?_ctName:undefined
+    };
+    const blob=new Blob([JSON.stringify(snap,null,2)],{type:'application/json'});
+    const url=URL.createObjectURL(blob);
+    const a2=document.createElement('a');
+    a2.href=url; a2.download=base+'.json'; a2.click();
+    URL.revokeObjectURL(url);
+    // Toast
+    const toast=document.getElementById('save-toast');
+    toast.style.display='block';
+    clearTimeout(toast._t);
+    toast._t=setTimeout(()=>{toast.style.display='none';},2500);
+  },100);
+});
+
+// ══════════════════════════════════
+// LOAD PARAMS FROM JSON
+// ══════════════════════════════════
+function restoreUI(q){
+  // Helper: set slider value + display text
+  function sl(id,val,fmt){
+    const el=document.getElementById(id);
+    const vEl=document.getElementById('v-'+id);
+    if(el)el.value=val;
+    if(vEl&&fmt)vEl.textContent=fmt(val);
+  }
+  sl('topR',q.topR,v=>v+' mm'); sl('botR',q.botR,v=>v+' mm');
+  sl('hgt',q.h,v=>v+' mm');
+  sl('coneAngle',q.coneAngle,v=>v+'°');
+  sl('wallT',q.wallT,v=>(+v).toFixed(1)+' mm');
+  sl('numRibs',q.numRibs,v=>v+' 條'); sl('twist',q.twist,v=>v+'°');
+  sl('ribH',q.ribH,v=>(+v>=0?'+':'')+((+v).toFixed(1))+' mm');
+  sl('ribS',q.ribS,v=>v+'');
+  sl('rib2H',q.rib2H,v=>(+v>=0?'+':'')+((+v).toFixed(1))+' mm');
+  sl('rib2Len',q.rib2Len,v=>Math.round(v/100*q.h)+' mm');
+  sl('numVert',q.numVert||0,v=>v+' 條');
+  sl('vertH',q.vertH!=null?q.vertH:2,v=>(+v>=0?'+':'')+((+v).toFixed(1))+' mm');
+  sl('vertS',q.vertS||2,v=>v+'');
+  sl('numHoriz',q.numHoriz||0,v=>v+' 條');
+  sl('horizH',q.horizH!=null?q.horizH:2,v=>(+v>=0?'+':'')+((+v).toFixed(1))+' mm');
+  sl('horizS',q.horizS||2,v=>v+'');
+  sl('crumple',q.crumple||0,v=>(+v).toFixed(1)+' mm');
+  sl('crumpleFreqA',q.crumpleFreqA!=null?q.crumpleFreqA:6,v=>v+'');
+  sl('crumpleFreqV',q.crumpleFreqV!=null?q.crumpleFreqV:3,v=>(+v).toFixed(1)+'');
+  sl('crumpleTwist',q.crumpleTwist!=null?q.crumpleTwist:90,v=>v+'°');
+  sl('crumpleOct',q.crumpleOct||2,v=>v+'');
+  sl('bulge',q.bulge||0,v=>(+v>=0?'+':'')+v+' mm');
+  sl('bulgePos',q.bulgePos!=null?q.bulgePos:0.5,v=>Math.round(v*100)+'%');
+  sl('bumpH',q.bumpH||0,v=>(+v>=0?'+':'')+((+v).toFixed(1))+' mm');
+  sl('bumpFreqA',q.bumpFreqA||8,v=>v+'');
+  sl('bumpFreqV',q.bumpFreqV||5,v=>v+'');
+  sl('bumpS',q.bumpS!=null?q.bumpS:3,v=>(+v).toFixed(1)+'');
+  P.bumpRandom=q.bumpRandom||false;
+  document.getElementById('bumpRandom').checked=P.bumpRandom;
+  document.getElementById('bump-rand-opts').style.display=P.bumpRandom?'block':'none';
+  document.getElementById('bump-grid-opts').style.display=P.bumpRandom?'none':'block';
+  sl('bumpCount',q.bumpCount!=null?q.bumpCount:60,v=>v+'');
+  sl('bumpSeed',q.bumpSeed!=null?q.bumpSeed:42,v=>v+'');
+  if(P.bumpRandom)rebuildBumpCenters();
+  P.bumpOrient=q.bumpOrient||0;
+  document.querySelectorAll('#bumpOrientRow .mode-btn').forEach(b=>b.classList.toggle('active',+b.dataset.orient===P.bumpOrient));
+  // Cross-section lobes
+  sl('lobeN',q.lobeN||0,v=>v+'');
+  sl('lobeAmp',q.lobeAmp||0,v=>(+v>=0?'+':'')+((+v).toFixed(1))+' mm');
+  sl('lobeTwist',q.lobeTwist||0,v=>v+'°');
+  // Stacked rings
+  sl('stackN',q.stackN||0,v=>v+'');
+  sl('stackAmp',q.stackAmp!=null?q.stackAmp:8,v=>(+v>=0?'+':'')+((+v).toFixed(1))+' mm');
+  sl('stackOffset',q.stackOffset||0,v=>((+v).toFixed(1))+' mm');
+  sl('axisBend',q.axisBend||0,v=>v+' mm');
+  sl('axisBendFreq',q.axisBendFreq!=null?q.axisBendFreq:1,v=>((+v).toFixed(2))+'×');
+  sl('axisBendPhase',q.axisBendPhase||0,v=>v+'°');
+  sl('axisTwist',q.axisTwist||0,v=>v+'°');
+  sl('axisBulge',q.axisBulge||0,v=>v+' mm');
+  // Rib profile
+  P.ribProfile=q.ribProfile||0;
+  document.querySelectorAll('#ribProfileRow .mode-btn').forEach(b=>b.classList.toggle('active',+b.dataset.rp===P.ribProfile));
+  // Displacement map params (image not saved in JSON — user re-uploads)
+  sl('dispH',q.dispH||0,v=>(+v>=0?'+':'')+((+v).toFixed(1))+' mm');
+  sl('dispTileX',q.dispTileX!=null?q.dispTileX:1,v=>'×'+v);
+  sl('dispTileV',q.dispTileV!=null?q.dispTileV:1,v=>'×'+v);
+  P.dispInvert=q.dispInvert||false; document.getElementById('dispInvert').checked=P.dispInvert;
+  P.dispEnv=q.dispEnv!==undefined?q.dispEnv:true; document.getElementById('dispEnv').checked=P.dispEnv;
+  // R-corner chamfer
+  sl('rimR',q.rimR!=null?q.rimR:0,v=>(+v).toFixed(1)+' mm');
+  P.rimRBot=q.rimRBot!==undefined?q.rimRBot:true; document.getElementById('rimRBot').checked=P.rimRBot;
+  P.rimRTop=q.rimRTop!==undefined?q.rimRTop:true; document.getElementById('rimRTop').checked=P.rimRTop;
+  // Envelope curve
+  if(q.envPts&&Array.isArray(q.envPts)&&q.envPts.length>=2){
+    P.envPts=q.envPts.map(p=>({...p}));
+  }else{P.envPts=[{v:0,m:1},{v:1,m:1}];}
+  setTimeout(drawEnvEditor,10);
+  sl('lightA',q.lightA,v=>v+'°');
+  sl('lightI',Math.round(q.lightI*100),v=>v+'%');
+  sl('grad',Math.round(q.gradAmt*100),v=>v+'%');
+
+  // Shape button
+  document.querySelectorAll('.shape-btn').forEach(b=>{
+    b.classList.toggle('active',b.dataset.shape===q.shape);
+  });
+  const isCustomShape=(q.shape==='custom'||q.shape==='belly');
+  document.getElementById('custom-opts').style.display=isCustomShape?'block':'none';
+  if(isCustomShape&&q.profilePts&&Array.isArray(q.profilePts)&&q.profilePts.length>=2){
+    P.profilePts=q.profilePts.map(p=>({...p}));
+    setTimeout(drawProfileEditor,10);
+  } else if(isCustomShape){
+    P.profilePts=[{v:0,r:q.botR||P.botR},{v:1,r:q.topR||P.topR}];
+    setTimeout(drawProfileEditor,10);
+  }
+
+  // Direction buttons
+  document.getElementById('dirCW').classList.toggle('active',q.cw);
+  document.getElementById('dirCCW').classList.toggle('active',!q.cw);
+
+  // Hollow
+  const hollowEl=document.getElementById('hollow');
+  hollowEl.checked=q.hollow;
+  document.getElementById('hollow-opts').classList.toggle('show',q.hollow);
+  document.getElementById('sealBot').checked=q.sealBot||false;
+
+  // Rib2
+  const rib2El=document.getElementById('rib2');
+  rib2El.checked=q.rib2;
+  document.getElementById('rib2-opts').style.display=q.rib2?'block':'none';
+  document.getElementById('rib2DirBot').classList.toggle('active',!q.rib2FromTop);
+  document.getElementById('rib2DirTop').classList.toggle('active',q.rib2FromTop);
+
+  // Color
+  const rc=v=>Math.round(v*255).toString(16).padStart(2,'0');
+  const hex='#'+rc(q.baseCol[0])+rc(q.baseCol[1])+rc(q.baseCol[2]);
+  document.getElementById('baseCol').value=hex;
+
+  syncLexUI();
+  schedRegen();
+}
+
+document.getElementById('loadFile').addEventListener('change',function(){
+  const file=this.files[0]; if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{
+    try{
+      const q=JSON.parse(e.target.result);
+      if(!q.shape)throw new Error('無效的參數檔');
+      // Merge into P (keep only known keys)
+      const keys=['shape','topR','botR','h','coneAngle',
+        'hollow','wallT','sealBot','numRibs','twist','ribH','ribS','cw',
+        'rib2','rib2H','rib2Len','rib2FromTop',
+        'numVert','vertH','vertS',
+        'numHoriz','horizH','horizS',
+        'crumple','crumpleFreqA','crumpleFreqV','crumpleTwist','crumpleOct',
+        'bulge','bulgePos',
+        'lobeN','lobeAmp','lobeTwist',
+        'stackN','stackAmp','stackOffset',
+        'axisBend','axisBendFreq','axisBendPhase','axisTwist','axisBulge',
+        'ribProfile',
+        'rimR','rimRBot','rimRTop',
+        'bumpH','bumpFreqA','bumpFreqV','bumpS','bumpOrient','bumpRandom','bumpCount','bumpSeed',
+        'dispH','dispTileX','dispTileV','dispInvert','dispEnv',
+        'arcSpan','slabW','texInvert','texStagger','texType','texAmp','texScale','texRough','texAngle','texSeed',
+        'mode','gradAmt','lightA','lightI'];
+      keys.forEach(k=>{if(q[k]!==undefined)P[k]=q[k];});
+      if(q._customTex)setCustomTexFromURL(q._customTex,q._customTexName||'',false);
+      if(q.baseCol&&q.baseCol.length===3)P.baseCol=[...q.baseCol];
+      // Restore profile points for custom/belly shapes
+      if(q.profilePts&&Array.isArray(q.profilePts)&&q.profilePts.length>=2){
+        P.profilePts=q.profilePts.map(p=>({...p}));
+      } else {
+        P.profilePts=[{v:0,r:P.botR},{v:1,r:P.topR}];
+      }
+      // Restore envelope points
+      if(q.envPts&&Array.isArray(q.envPts)&&q.envPts.length>=2){
+        P.envPts=q.envPts.map(p=>({...p}));
+      } else {
+        P.envPts=[{v:0,m:1},{v:1,m:1}];
+      }
+      restoreUI(P);
+    }catch(err){alert('載入失敗：'+err.message);}
+  };
+  reader.readAsText(file);
+  this.value=''; // allow re-loading same file
+});
+
+// Export
+function exportTag(){
+  return `spiral_${P.shape}_top${(P.topR*2).toFixed(0)}x${P.h.toFixed(0)}`+
+    (isOpenArc()?`_arc${P.arcSpan}`:'')+((P.hollow||isOpenArc())?'_hollow':'')+
+    (P.texType&&P.texType!=='none'?`_${P.texType}`:'');
+}
+document.getElementById('exportBtn').addEventListener('click',()=>{
+  if(!mesh||!mesh.Go)return;
+  const btn=document.getElementById('exportBtn');
+  btn.textContent='⏳ 匯出中…';btn.disabled=true;
+  setTimeout(()=>{
+    const{Go,Gi}=mesh;
+    const N=SEG_A,M=SEG_H,{h}=P;
+    const open=isOpenArc(), hollow=!!Gi;
+    const NC=Go[0].length;
+    const lines=[
+      '# Exported from 螺旋器型設計工具',
+      `# Shape:${P.shape} | Ribs:${P.numRibs} × ${P.twist}deg | Rib:${P.ribH}mm | Texture:${P.texType}`,
+      `# Dim: top⌀${(P.topR*2).toFixed(1)} bot⌀${(P.botR*2).toFixed(1)} H${P.h.toFixed(1)}mm${hollow?' HOLLOW wall='+P.wallT+'mm':''}${open?' ARC='+P.arcSpan+'deg':''}`,
+      `o ${exportTag()}`
+    ];
+    const yOff=h/2;
+    const pushV=([x,y,z])=>lines.push(`v ${(x/1000).toFixed(8)} ${((y-yOff)/1000).toFixed(8)} ${(z/1000).toFixed(8)}`);
+    for(let j=0;j<=M;j++)for(let i=0;i<NC;i++)pushV(Go[j][i]);
+    const nOuter=(M+1)*NC;
+    if(hollow)for(let j=0;j<=M;j++)for(let i=0;i<NC;i++)pushV(Gi[j][i]);
+    const o=(j,i)=>j*NC+i+1;
+    const inn=(j,i)=>nOuter+j*NC+i+1;
+    const ni=nextCol;
+    for(let j=0;j<M;j++)for(let i=0;i<N;i++)
+      lines.push(`f ${o(j,i)} ${o(j+1,i)} ${o(j+1,ni(i))} ${o(j,ni(i))}`);
+    if(hollow){
+      for(let j=0;j<M;j++)for(let i=0;i<N;i++)
+        lines.push(`f ${inn(j,i)} ${inn(j,ni(i))} ${inn(j+1,ni(i))} ${inn(j+1,i)}`);
+      for(let i=0;i<N;i++)
+        lines.push(`f ${o(M,ni(i))} ${o(M,i)} ${inn(M,i)} ${inn(M,ni(i))}`);
+      if(P.sealBot&&!open){
+        pushV(ringCenter(Go,0));
+        const botC=nOuter+(M+1)*NC+1;
+        for(let i=0;i<N;i++)lines.push(`f ${botC} ${o(0,i)} ${o(0,ni(i))}`);
+      } else {
+        for(let i=0;i<N;i++)
+          lines.push(`f ${o(0,i)} ${o(0,ni(i))} ${inn(0,ni(i))} ${inn(0,i)}`);
+      }
+      if(open){
+        for(let j=0;j<M;j++){
+          lines.push(`f ${o(j,0)} ${inn(j,0)} ${inn(j+1,0)} ${o(j+1,0)}`);
+          lines.push(`f ${o(j,N)} ${o(j+1,N)} ${inn(j+1,N)} ${inn(j,N)}`);
+        }
+      }
+    } else {
+      pushV(ringCenter(Go,0));
+      pushV(ringCenter(Go,M));
+      const botC=nOuter+1, topC=nOuter+2;
+      for(let i=0;i<N;i++){
+        lines.push(`f ${botC} ${o(0,i)} ${o(0,ni(i))}`);
+        lines.push(`f ${topC} ${o(M,ni(i))} ${o(M,i)}`);
+      }
+    }
+    const blob=new Blob([lines.join('\n')],{type:'text/plain'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;
+    a.download=exportTag()+'.obj';
+    a.click();URL.revokeObjectURL(url);
+    btn.textContent='↓ 匯出 .obj 檔案';btn.disabled=false;
+  },30);
+});
+
+// ══════════════════════════════════
+// STL EXPORT (binary)
+// ══════════════════════════════════
+document.getElementById('stlBtn').addEventListener('click',()=>{
+  if(!mesh||!mesh.Go)return;
+  const btn=document.getElementById('stlBtn');
+  btn.textContent='⏳ 匯出中…';btn.disabled=true;
+  setTimeout(()=>{
+    const{Go,Gi}=mesh;
+    const N=SEG_A,M=SEG_H,{h}=P;
+    const open=isOpenArc(), hollow=!!Gi;
+    const sealed=P.sealBot&&!open;
+    const yOff=h/2;
+    let totalTri=M*N*2;
+    if(hollow){
+      totalTri+=M*N*2+N*2+(sealed?N:N*2)+(open?M*4:0);
+    } else {
+      totalTri+=N+N;
+    }
+    const buf=new ArrayBuffer(84+50*totalTri);
+    const dv=new DataView(buf);
+    const hdr=`Binary STL - Spiral Tool shape:${P.shape} tex:${P.texType}`;
+    for(let i=0;i<80;i++)dv.setUint8(i,i<hdr.length?hdr.charCodeAt(i)&0x7f:0);
+    dv.setUint32(80,totalTri,true);
+    let off=84;
+    function writeTri(ax,ay,az,bx,by,bz,cx,cy,cz){
+      const ux=bx-ax,uy=by-ay,uz=bz-az;
+      const vx=cx-ax,vy=cy-ay,vz=cz-az;
+      let nx=uy*vz-uz*vy, ny=uz*vx-ux*vz, nz=ux*vy-uy*vx;
+      const nl=Math.sqrt(nx*nx+ny*ny+nz*nz);
+      if(nl>1e-12){nx/=nl;ny/=nl;nz/=nl;}
+      dv.setFloat32(off,nx,true);dv.setFloat32(off+4,ny,true);dv.setFloat32(off+8,nz,true);
+      dv.setFloat32(off+12,ax,true);dv.setFloat32(off+16,ay,true);dv.setFloat32(off+20,az,true);
+      dv.setFloat32(off+24,bx,true);dv.setFloat32(off+28,by,true);dv.setFloat32(off+32,bz,true);
+      dv.setFloat32(off+36,cx,true);dv.setFloat32(off+40,cy,true);dv.setFloat32(off+44,cz,true);
+      dv.setUint16(off+48,0,true);
+      off+=50;
+    }
+    function writeQuad(a,b,c,d){writeTri(...a,...b,...c);writeTri(...a,...c,...d);}
+    function vy(G,j,i){const[x,y,z]=G[j][i];return[x/1000,(y-yOff)/1000,z/1000];}
+    const ni=nextCol;
+    for(let j=0;j<M;j++)for(let i=0;i<N;i++)
+      writeQuad(vy(Go,j,i),vy(Go,j+1,i),vy(Go,j+1,ni(i)),vy(Go,j,ni(i)));
+    if(hollow){
+      for(let j=0;j<M;j++)for(let i=0;i<N;i++)
+        writeQuad(vy(Gi,j,i),vy(Gi,j,ni(i)),vy(Gi,j+1,ni(i)),vy(Gi,j+1,i));
+      for(let i=0;i<N;i++)
+        writeQuad(vy(Go,M,ni(i)),vy(Go,M,i),vy(Gi,M,i),vy(Gi,M,ni(i)));
+      if(sealed){
+        const bc=ringCenter(Go,0), bcv=[bc[0]/1000,(bc[1]-yOff)/1000,bc[2]/1000];
+        for(let i=0;i<N;i++)writeTri(...bcv,...vy(Go,0,i),...vy(Go,0,ni(i)));
+      } else {
+        for(let i=0;i<N;i++)
+          writeQuad(vy(Go,0,i),vy(Go,0,ni(i)),vy(Gi,0,ni(i)),vy(Gi,0,i));
+      }
+      if(open){
+        for(let j=0;j<M;j++){
+          writeQuad(vy(Go,j,0),vy(Gi,j,0),vy(Gi,j+1,0),vy(Go,j+1,0));
+          writeQuad(vy(Go,j,N),vy(Go,j+1,N),vy(Gi,j+1,N),vy(Gi,j,N));
+        }
+      }
+    } else {
+      const cvt=p=>[p[0]/1000,(p[1]-yOff)/1000,p[2]/1000];
+      const bcv=cvt(ringCenter(Go,0)), tcv=cvt(ringCenter(Go,M));
+      for(let i=0;i<N;i++){
+        writeTri(...bcv,...vy(Go,0,i),...vy(Go,0,ni(i)));
+        writeTri(...tcv,...vy(Go,M,ni(i)),...vy(Go,M,i));
+      }
+    }
+    const blob=new Blob([buf],{type:'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;
+    a.download=exportTag()+'.stl';
+    a.click();URL.revokeObjectURL(url);
+    btn.textContent='↓ 匯出 .stl 檔案';btn.disabled=false;
+  },30);
+});
+
+// ══════════════════════════════════
+// FLAT PANEL MODE
+// ══════════════════════════════════
+let flatModeActive=false;
+const PF={width:100,height:100,thick:5,res:180,invert:false};
+let svgSolid=null; // 2D boolean grid [row][col]
+let svgGridW=0,svgGridH=0;
+let svgRawText='';
+let flatMesh=null;
+
+// Mode toggle
+document.getElementById('spiralModeBtn').addEventListener('click',()=>{
+  if(!flatModeActive)return;
+  flatModeActive=false;
+  document.getElementById('spiral-panel').style.display='flex';
+  document.getElementById('flat-panel').style.display='none';
+  document.getElementById('spiralModeBtn').style.background='#5a5a5e';
+  document.getElementById('spiralModeBtn').style.borderColor='transparent';
+  document.getElementById('spiralModeBtn').style.color='#f5f5f7';
+  document.getElementById('flatModeBtn').style.background='transparent';
+  document.getElementById('flatModeBtn').style.borderColor='transparent';
+  document.getElementById('flatModeBtn').style.color='#a1a1a6';
+  upload();
+});
+document.getElementById('flatModeBtn').addEventListener('click',()=>{
+  if(flatModeActive)return;
+  flatModeActive=true;
+  document.getElementById('spiral-panel').style.display='none';
+  document.getElementById('flat-panel').style.display='flex';
+  document.getElementById('flatModeBtn').style.background='#5a5a5e';
+  document.getElementById('flatModeBtn').style.borderColor='transparent';
+  document.getElementById('flatModeBtn').style.color='#f5f5f7';
+  document.getElementById('spiralModeBtn').style.background='transparent';
+  document.getElementById('spiralModeBtn').style.borderColor='transparent';
+  document.getElementById('spiralModeBtn').style.color='#a1a1a6';
+  // Snap to front view so panel proportions appear undistorted
+  theta=0; phi=Math.PI/2;
+  if(svgSolid)uploadFlat();
+  else{mesh=null;} // clear view until SVG is loaded
+});
+
+// SVG file input
+document.getElementById('svgFile').addEventListener('change',function(){
+  const file=this.files[0];if(!file)return;
+  const reader=new FileReader();
+  reader.onload=e=>{svgRawText=e.target.result;processSVG(svgRawText);};
+  reader.readAsText(file);
+  this.value='';
+});
+
+// Invert toggle
+document.getElementById('svgInvert').addEventListener('change',function(){
+  PF.invert=this.checked;
+  if(svgRawText)processSVG(svgRawText);
+});
+
+// Flat sliders
+[
+  {id:'flatW', key:'width', fmt:v=>v+' mm'},
+  {id:'flatH', key:'height',fmt:v=>v+' mm'},
+  {id:'flatThick',key:'thick',fmt:v=>(+v).toFixed(1)+' mm'},
+  {id:'flatRes', key:'res',  fmt:v=>v+''},
+].forEach(({id,key,fmt})=>{
+  const el=document.getElementById(id);
+  const vEl=document.getElementById('v-'+id);
+  el.addEventListener('input',function(){
+    PF[key]=+this.value;
+    if(vEl)vEl.textContent=fmt(this.value);
+    if(key==='res'&&svgRawText){processSVG(svgRawText);}
+    else if(svgSolid){uploadFlat();}
+  });
+  if(vEl)vEl.textContent=fmt(el.value);
+});
+
+// Convert SVG text → pixel grid → boolean solid array
+function processSVG(svgText){
+  const blob=new Blob([svgText],{type:'image/svg+xml'});
+  const url=URL.createObjectURL(blob);
+  const img=new Image();
+  img.onload=()=>{
+    const aspect=img.naturalWidth/img.naturalHeight||1;
+    // Grid: keep aspect ratio, clamp to res
+    let GW=PF.res, GH=Math.max(1,Math.round(PF.res/aspect));
+    const cvs=document.createElement('canvas');
+    cvs.width=GW;cvs.height=GH;
+    const ctx=cvs.getContext('2d');
+    ctx.fillStyle='#ffffff';ctx.fillRect(0,0,GW,GH);
+    ctx.drawImage(img,0,0,GW,GH);
+    URL.revokeObjectURL(url);
+    const px=ctx.getImageData(0,0,GW,GH).data;
+    svgSolid=[];
+    let solidCount=0;
+    for(let y=0;y<GH;y++){
+      const row=[];
+      for(let x=0;x<GW;x++){
+        const i=(y*GW+x)*4;
+        const lum=0.299*px[i]+0.587*px[i+1]+0.114*px[i+2];
+        let s=(px[i+3]>64)&&(lum<128);
+        if(PF.invert)s=!s;
+        row.push(s);
+        if(s)solidCount++;
+      }
+      svgSolid.push(row);
+    }
+    svgGridW=GW;svgGridH=GH;
+    // Preview
+    const prev=document.getElementById('svgPreview');
+    prev.width=GW;prev.height=GH;prev.style.display='block';
+    const pCtx=prev.getContext('2d');
+    pCtx.drawImage(cvs,0,0,GW,GH);
+    // Auto-adjust height so cells stay square (SVG aspect ratio is preserved).
+    // GH/GW = SVGheight/SVGwidth = 1/aspect, so autoH = W * GH/GW keeps cellX=cellY.
+    const autoH = Math.max(20, Math.min(300, Math.round(PF.width * GH / GW)));
+    if(autoH !== PF.height){
+      PF.height = autoH;
+      const hEl=document.getElementById('flatH');
+      if(hEl){hEl.value=autoH;document.getElementById('v-flatH').textContent=autoH+' mm';}
+    }
+    document.getElementById('svgInfo').style.display='block';
+    document.getElementById('svgInfo').textContent=
+      `網格 ${GW}×${GH}・實心率 ${(solidCount/(GW*GH)*100).toFixed(0)}%`;
+    // Show export buttons
+    document.getElementById('flat-no-svg').style.display='none';
+    document.getElementById('flatExportOBJ').style.display='block';
+    document.getElementById('flatExportSTL').style.display='block';
+    if(flatModeActive)uploadFlat();
+  };
+  img.onerror=()=>{alert('SVG 載入失敗，請確認檔案格式');URL.revokeObjectURL(url);};
+  img.src=url;
+}
+
+// Build flat mesh from svgSolid grid
+// Panel stands upright in the X-Y plane (Z = thickness going into the screen).
+// This ensures PF.width (left-right) and PF.height (up-down) are visually true
+// without any perspective foreshortening of either dimension.
+function buildFlatMesh(){
+  if(!svgSolid)return null;
+  const GH=svgSolid.length,GW=svgSolid[0].length;
+  const W=PF.width,H=PF.height,T=PF.thick;
+  const cellX=W/GW, cellY=H/GH;
+  const maxDim=Math.max(W,H,T)||1;
+  // x: SVG left→right (0..W) → GL X
+  // y: SVG top→bottom mapped to GL Y with flip (gz=0=top→high Y)
+  // z: thickness (0..T) → GL Z (shallow depth)
+  function nrm(x,y,z){
+    return[(x-W/2)/maxDim*2, (y-H/2)/maxDim*2, (z-T/2)/maxDim*2];
+  }
+  function isSolid(gx,gz){
+    if(gx<0||gx>=GW||gz<0||gz>=GH)return false;
+    return svgSolid[gz][gx];
+  }
+  const posA=[],norA=[],hgtA=[],wfA=[];
+  function tri(nx,ny,nz,hv,a,b,c){
+    posA.push(...nrm(...a),...nrm(...b),...nrm(...c));
+    norA.push(nx,ny,nz,nx,ny,nz,nx,ny,nz);
+    hgtA.push(hv,hv,hv);
+  }
+  for(let gz=0;gz<GH;gz++){
+    for(let gx=0;gx<GW;gx++){
+      if(!isSolid(gx,gz))continue;
+      const x0=gx*cellX, x1=x0+cellX;
+      // gz=0 = top row of SVG → highest Y in GL
+      const y0=(GH-1-gz)*cellY, y1=y0+cellY;
+      // Front face (+Z normal — faces the viewer)
+      tri(0,0,1, 1,[x0,y0,T],[x1,y0,T],[x1,y1,T]);
+      tri(0,0,1, 1,[x0,y0,T],[x1,y1,T],[x0,y1,T]);
+      // Back face (-Z normal)
+      tri(0,0,-1, 0,[x0,y0,0],[x1,y1,0],[x1,y0,0]);
+      tri(0,0,-1, 0,[x0,y0,0],[x0,y1,0],[x1,y1,0]);
+      // -X wall (left edge)
+      if(!isSolid(gx-1,gz)){
+        tri(-1,0,0,.5,[x0,y0,0],[x0,y1,T],[x0,y0,T]);
+        tri(-1,0,0,.5,[x0,y0,0],[x0,y1,0],[x0,y1,T]);
+      }
+      // +X wall (right edge)
+      if(!isSolid(gx+1,gz)){
+        tri(1,0,0,.5,[x1,y0,0],[x1,y0,T],[x1,y1,T]);
+        tri(1,0,0,.5,[x1,y0,0],[x1,y1,T],[x1,y1,0]);
+      }
+      // -Y wall (bottom edge; gz+1 is next row down in SVG = lower Y in GL)
+      if(!isSolid(gx,gz+1)){
+        tri(0,-1,0,.5,[x0,y0,0],[x1,y0,T],[x0,y0,T]);
+        tri(0,-1,0,.5,[x0,y0,0],[x1,y0,0],[x1,y0,T]);
+      }
+      // +Y wall (top edge; gz-1 is row above in SVG = higher Y in GL)
+      if(!isSolid(gx,gz-1)){
+        tri(0,1,0,.5,[x0,y1,0],[x0,y1,T],[x1,y1,T]);
+        tri(0,1,0,.5,[x0,y1,0],[x1,y1,T],[x1,y1,0]);
+      }
+    }
+  }
+  // Wireframe: front-face horizontal boundary edges (sparsely sampled)
+  const step=Math.max(1,Math.floor(GH/16));
+  for(let gz=0;gz<=GH;gz+=step){
+    for(let gx=0;gx<GW;gx++){
+      const s=isSolid(gx,Math.min(gz,GH-1));
+      if(!s)continue;
+      const x0=gx*cellX, x1=x0+cellX;
+      const y=(GH-gz)*cellY; // boundary between rows gz-1 and gz
+      wfA.push(...nrm(x0,y,T),...nrm(x1,y,T));
+    }
+  }
+  flatMesh={GW,GH,W,H,T,cellX,cellY,isSolid};
+  return{
+    pos:new Float32Array(posA),nor:new Float32Array(norA),
+    hgt:new Float32Array(hgtA),triCount:posA.length/3,
+    wf:new Float32Array(wfA),wfCount:wfA.length/3,
+    Go:null,Gi:null,maxDim,normFn:nrm
+  };
+}
+
+function uploadFlat(){
+  if(!svgSolid)return;
+  const m=buildFlatMesh();
+  if(!m||m.triCount===0){mesh=null;return;}
+  gl.bindBuffer(gl.ARRAY_BUFFER,bPos);gl.bufferData(gl.ARRAY_BUFFER,m.pos,gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER,bNor);gl.bufferData(gl.ARRAY_BUFFER,m.nor,gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER,bHgt);gl.bufferData(gl.ARRAY_BUFFER,m.hgt,gl.DYNAMIC_DRAW);
+  gl.bindBuffer(gl.ARRAY_BUFFER,bWF); gl.bufferData(gl.ARRAY_BUFFER,m.wf, gl.DYNAMIC_DRAW);
+  mesh=m;
+  // Show flat dimensions in HUD
+  document.getElementById('dim-hud').innerHTML=
+    `<span style="color:#a1a1a6">寬</span> ${PF.width} mm<br>`+
+    `<span style="color:#a1a1a6">高</span> ${PF.height} mm<br>`+
+    `<span style="color:#a1a1a6">厚度</span> ${PF.thick.toFixed(1)} mm`;
+}
+
+// Flat OBJ export
+document.getElementById('flatExportOBJ').addEventListener('click',()=>{
+  if(!svgSolid||!flatMesh)return;
+  const btn=document.getElementById('flatExportOBJ');
+  btn.textContent='⏳ 匯出中…';btn.disabled=true;
+  setTimeout(()=>{
+    const{GW,GH,W,H,T,cellX,cellY,isSolid}=flatMesh;
+    const zOff=T/2;
+    const lines=['# Flat panel - 螺旋器型設計工具',
+      `# Size: ${W}×${H} mm, thickness: ${T} mm, grid: ${GW}×${GH}`,
+      '# Coords: X=width, Y=height (SVG top→high Y), Z=thickness (centred)',
+      'o flat_panel'];
+    // Export: x=SVG horizontal, y=SVG vertical (gz=0=top→high Y), z=thickness centred at 0
+    let vidx=1;
+    function v(x,y,z){lines.push(`v ${(x/1000).toFixed(7)} ${(y/1000).toFixed(7)} ${((z-zOff)/1000).toFixed(7)}`);return vidx++;}
+    function f(...is){lines.push('f '+is.join(' '));}
+    for(let gz=0;gz<GH;gz++){
+      for(let gx=0;gx<GW;gx++){
+        if(!isSolid(gx,gz))continue;
+        const x0=gx*cellX, x1=x0+cellX;
+        const y0=(GH-1-gz)*cellY, y1=y0+cellY; // gz=0=top→high Y
+        // Front face (z=T)
+        const t0=v(x0,y0,T),t1=v(x1,y0,T),t2=v(x1,y1,T),t3=v(x0,y1,T);
+        f(t0,t1,t2,t3);
+        // Back face (z=0, reversed)
+        const b0=v(x0,y0,0),b1=v(x1,y0,0),b2=v(x1,y1,0),b3=v(x0,y1,0);
+        f(b0,b3,b2,b1);
+        if(!isSolid(gx-1,gz)){const w0=v(x0,y0,0),w1=v(x0,y0,T),w2=v(x0,y1,T),w3=v(x0,y1,0);f(w0,w3,w2,w1);}
+        if(!isSolid(gx+1,gz)){const w0=v(x1,y0,0),w1=v(x1,y0,T),w2=v(x1,y1,T),w3=v(x1,y1,0);f(w0,w1,w2,w3);}
+        if(!isSolid(gx,gz-1)){const w0=v(x0,y1,0),w1=v(x1,y1,0),w2=v(x1,y1,T),w3=v(x0,y1,T);f(w0,w1,w2,w3);}
+        if(!isSolid(gx,gz+1)){const w0=v(x0,y0,0),w1=v(x1,y0,0),w2=v(x1,y0,T),w3=v(x0,y0,T);f(w0,w3,w2,w1);}
+      }
+    }
+    const blob=new Blob([lines.join('\n')],{type:'text/plain'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;
+    a.download=`flat_panel_${W}x${H}x${T}mm.obj`;
+    a.click();URL.revokeObjectURL(url);
+    btn.textContent='↓ 匯出 .obj 檔案';btn.disabled=false;
+  },30);
+});
+
+// Flat STL export
+document.getElementById('flatExportSTL').addEventListener('click',()=>{
+  if(!svgSolid||!flatMesh)return;
+  const btn=document.getElementById('flatExportSTL');
+  btn.textContent='⏳ 匯出中…';btn.disabled=true;
+  setTimeout(()=>{
+    const{GW,GH,W,H,T,cellX,cellY,isSolid}=flatMesh;
+    const zOff=T/2;
+    // Count triangles
+    let triCount=0;
+    for(let gz=0;gz<GH;gz++)for(let gx=0;gx<GW;gx++){
+      if(!isSolid(gx,gz))continue;
+      triCount+=4; // front+back (2 tri each = 4)
+      if(!isSolid(gx-1,gz))triCount+=2;
+      if(!isSolid(gx+1,gz))triCount+=2;
+      if(!isSolid(gx,gz-1))triCount+=2;
+      if(!isSolid(gx,gz+1))triCount+=2;
+    }
+    const buf=new ArrayBuffer(84+50*triCount);
+    const dv=new DataView(buf);
+    const hdr=`Binary STL flat panel ${W}x${H}x${T}mm`;
+    for(let i=0;i<80;i++)dv.setUint8(i,i<hdr.length?hdr.charCodeAt(i):0);
+    dv.setUint32(80,triCount,true);
+    let off=84;
+    // Export coords: x=SVG_h, y=SVG_v (gz=0=top→high Y), z=thickness centred at 0
+    function stlTri(ax,ay,az,bx,by,bz,cx,cy,cz){
+      const ux=bx-ax,uy=by-ay,uz=bz-az,vx=cx-ax,vy=cy-ay,vz=cz-az;
+      let nx=uy*vz-uz*vy,ny=uz*vx-ux*vz,nz=ux*vy-uy*vx;
+      const nl=Math.sqrt(nx*nx+ny*ny+nz*nz);
+      if(nl>1e-12){nx/=nl;ny/=nl;nz/=nl;}
+      dv.setFloat32(off,nx,true);dv.setFloat32(off+4,ny,true);dv.setFloat32(off+8,nz,true);
+      dv.setFloat32(off+12,ax/1000,true);dv.setFloat32(off+16,ay/1000,true);dv.setFloat32(off+20,(az-zOff)/1000,true);
+      dv.setFloat32(off+24,bx/1000,true);dv.setFloat32(off+28,by/1000,true);dv.setFloat32(off+32,(bz-zOff)/1000,true);
+      dv.setFloat32(off+36,cx/1000,true);dv.setFloat32(off+40,cy/1000,true);dv.setFloat32(off+44,(cz-zOff)/1000,true);
+      dv.setUint16(off+48,0,true);off+=50;
+    }
+    function stlQuad(ax,ay,az,bx,by,bz,cx,cy,cz,dx,dy,dz){
+      stlTri(ax,ay,az,bx,by,bz,cx,cy,cz);
+      stlTri(ax,ay,az,cx,cy,cz,dx,dy,dz);
+    }
+    for(let gz=0;gz<GH;gz++)for(let gx=0;gx<GW;gx++){
+      if(!isSolid(gx,gz))continue;
+      const x0=gx*cellX, x1=x0+cellX;
+      const y0=(GH-1-gz)*cellY, y1=y0+cellY;
+      // Front face (z=T)
+      stlQuad(x0,y0,T, x1,y0,T, x1,y1,T, x0,y1,T);
+      // Back face (z=0, reversed winding)
+      stlQuad(x0,y0,0, x0,y1,0, x1,y1,0, x1,y0,0);
+      if(!isSolid(gx-1,gz))stlQuad(x0,y0,0, x0,y1,0, x0,y1,T, x0,y0,T);
+      if(!isSolid(gx+1,gz))stlQuad(x1,y0,0, x1,y0,T, x1,y1,T, x1,y1,0);
+      if(!isSolid(gx,gz-1))stlQuad(x0,y1,0, x0,y1,T, x1,y1,T, x1,y1,0);
+      if(!isSolid(gx,gz+1))stlQuad(x0,y0,0, x1,y0,0, x1,y0,T, x0,y0,T);
+    }
+    const blob=new Blob([buf],{type:'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;
+    a.download=`flat_panel_${W}x${H}x${T}mm.stl`;
+    a.click();URL.revokeObjectURL(url);
+    btn.textContent='↓ 匯出 .stl 檔案';btn.disabled=false;
+  },30);
+});
+
+// ══════════════════════════════════
+// LEXICON UI 器型語彙 / 紋理語彙
+// ══════════════════════════════════
+const FORM_PRESETS=[
+  {key:'weng',  name:'甕',  sub:'寬肩儲物',  h:220,wallT:6,sealBot:true,
+   profile:[{v:0,r:58},{v:0.08,r:76},{v:0.42,r:112},{v:0.62,r:108},{v:0.82,r:66},{v:0.91,r:50},{v:0.96,r:54},{v:1,r:57}]},
+  {key:'vase',  name:'花瓶',sub:'長頸鼓腹',  h:240,wallT:4,sealBot:true,
+   profile:[{v:0,r:36},{v:0.12,r:48},{v:0.34,r:62},{v:0.55,r:46},{v:0.72,r:20},{v:0.86,r:17},{v:1,r:34}]},
+  {key:'jar',   name:'罐',  sub:'短頸收口',  h:150,wallT:5,sealBot:true,
+   profile:[{v:0,r:44},{v:0.1,r:54},{v:0.48,r:66},{v:0.78,r:56},{v:0.88,r:38},{v:0.94,r:37},{v:1,r:40}]},
+  {key:'pipe',  name:'陶管',sub:'承插排水管',h:250,wallT:8,sealBot:false,
+   profile:[{v:0,r:60},{v:0.1,r:60},{v:0.16,r:47},{v:0.22,r:45},{v:1,r:45}]},
+  {key:'tile',  name:'瓦片',sub:'板瓦弧面',  h:230,wallT:9,sealBot:false,arcSpan:100,shape:'cone',topR:72,botR:82},
+  {key:'tongwa',name:'筒瓦',sub:'半圓蓋瓦',  h:210,wallT:8,sealBot:false,arcSpan:180,shape:'cone',topR:42,botR:48},
+  {key:'bowl',  name:'碗',  sub:'圈足飯碗',  h:72, wallT:4,sealBot:true,
+   profile:[{v:0,r:30},{v:0.09,r:31},{v:0.14,r:38},{v:0.4,r:58},{v:0.75,r:70},{v:1,r:75}]},
+  {key:'bo',    name:'缽',  sub:'斂口圓缽',  h:90, wallT:5,sealBot:true,
+   profile:[{v:0,r:32},{v:0.25,r:58},{v:0.6,r:72},{v:0.88,r:67},{v:1,r:60}]},
+  {key:'slab',  name:'平板磚',sub:'浮雕面磚',h:150,wallT:10,sealBot:false,shape:'slab',slabW:150,topR:75,botR:75},
+  {key:'cup',   name:'杯',  sub:'圈足茶杯',  h:65, wallT:3,sealBot:true,
+   profile:[{v:0,r:22},{v:0.08,r:23},{v:0.13,r:28},{v:0.6,r:36},{v:1,r:39}]},
+];
+const CUSTOM_TEX={key:'custom',name:'自訂向量',sub:'上傳 SVG',amp:1.5,scale:30,rough:0.05,angle:0};
+function texName(k){return k==='custom'?'自訂向量'+(_ctName?'（'+_ctName+'）':''):((TEX_PRESETS.find(t=>t.key===k)||{}).name||'');}
+const TEX_PRESETS=[
+  {key:'rush',    name:'藺草紋',sub:'草蓆編織',amp:1.5, scale:18, rough:0.3,angle:0},
+  {key:'mountain',name:'山紋',  sub:'稜線皴法',amp:3,   scale:22, rough:0.5,angle:0},
+  {key:'water',   name:'水波紋',sub:'流動波浪',amp:2,   scale:14, rough:0.5,angle:0},
+  {key:'fire',    name:'火痕',  sub:'窯火舔痕',amp:3.5, scale:16, rough:0.5,angle:0},
+  {key:'cord',    name:'繩紋',  sub:'拍印繩痕',amp:-1.2,scale:3.5,rough:0.4,angle:50},
+  {key:'throw',   name:'拉坯痕',sub:'轆轤旋紋',amp:-0.8,scale:6,  rough:0.4,angle:0},
+  {key:'bamboo',  name:'竹節紋',sub:'節與纖維',amp:2,   scale:40, rough:0.5,angle:0},
+  {key:'scale',   name:'魚鱗紋',sub:'層疊鱗片',amp:1.5, scale:14, rough:0.2,angle:0},
+  {key:'pinch',   name:'指捏痕',sub:'手捏凹痕',amp:-3,  scale:20, rough:0.7,angle:0},
+];
+
+function syncLexUI(){
+  const set=(id,val,txt)=>{const e=document.getElementById(id);if(e)e.value=val;const t=document.getElementById('v-'+id);if(t)t.textContent=txt;};
+  set('arcSpan',P.arcSpan,P.arcSpan+'°');
+  set('texAmp',P.texAmp,(P.texAmp>=0?'+':'')+(+P.texAmp).toFixed(1)+' mm');
+  set('texScale',P.texScale,(+P.texScale).toFixed(1)+' mm');
+  set('texRough',Math.round(P.texRough*100),Math.round(P.texRough*100)+'%');
+  set('texAngle',P.texAngle,P.texAngle+'°');
+  set('texSeed',P.texSeed,P.texSeed+'');
+  document.querySelectorAll('#texGrid .lex-btn').forEach(b=>b.classList.toggle('active',b.dataset.tex===P.texType));
+  document.getElementById('tex-opts').style.display=(!P.texType||P.texType==='none')?'none':'block';
+  const isC=P.texType==='custom';
+  document.getElementById('tex-custom-opts').style.display=isC?'block':'none';
+  document.getElementById('texSeed-row').style.display=isC?'none':'flex';
+  document.getElementById('lbl-texRough').textContent=isC?'邊緣柔化':'自然變化';
+  document.getElementById('lbl-texAngle').textContent=isC?'傾斜錯位':'方向傾斜';
+  document.getElementById('texInvert').checked=!!P.texInvert;
+  document.getElementById('texStagger').checked=!!P.texStagger;
+  document.getElementById('ctName').textContent=_ctName;
+  const sw=document.getElementById('slabW');if(sw){sw.value=P.slabW;document.getElementById('v-slabW').textContent=P.slabW+' mm';}
+}
+function setActiveForm(key){
+  document.querySelectorAll('#formGrid .lex-btn').forEach(b=>b.classList.toggle('active',b.dataset.form===key));
+}
+
+function applyForm(f){
+  pushHistory();
+  // Keep texture + display settings; reset geometry & legacy textures to defaults
+  const keepKeys=['texInvert','texStagger','texType','texAmp','texScale','texRough','texAngle','texSeed','mode','gradAmt','lightA','lightI'];
+  const kept={};keepKeys.forEach(k=>kept[k]=P[k]);
+  const col=[...P.baseCol];
+  Object.assign(P,DEF,kept,{baseCol:col,envPts:cloneEnv(DEF_ENV)});
+  P.numRibs=0;            // start from a plain wall
+  P.hollow=true;
+  P.h=f.h; P.wallT=f.wallT; P.sealBot=f.sealBot; P.arcSpan=f.arcSpan||360;
+  if(f.profile){
+    P.shape='custom';
+    P.profilePts=cloneProfile(f.profile);
+    P.botR=f.profile[0].r; P.topR=f.profile[f.profile.length-1].r;
+  } else {
+    P.shape=f.shape; P.topR=f.topR; P.botR=f.botR;
+    if(f.slabW)P.slabW=f.slabW;
+    P.profilePts=[{v:0,r:f.botR},{v:1,r:f.topR}];
+  }
+  P.coneAngle=angleFromDims();
+  restoreUI(P);
+  setActiveForm(f.key);
+  setTimeout(()=>{try{drawProfileEditor();}catch(e){}},20);
+}
+function applyTex(t){
+  pushHistory();
+  P.texType=t.key;
+  P.texAmp=t.amp; P.texScale=t.scale; P.texRough=t.rough; P.texAngle=t.angle;
+  if(t.key==='custom')rasterCustomTex();
+  syncLexUI(); schedRegen();
+}
+
+// Thumbnails — little relief swatches so each choice is recognisable
+function drawTexThumb(cv,t){
+  const W=cv.width,H=cv.height,ctx=cv.getContext('2d');
+  const R0=40, L=clamp(t.scale*5,20,150), Hm=L*H/W;
+  const prm={s:t.scale,r:t.rough,a:t.angle*Math.PI/180,seed:7,inv:t.inv,stagger:t.stagger};
+  const vals=new Float32Array(W*H);
+  for(let y=0;y<H;y++){
+    const yy=(1-y/(H-1))*Hm;
+    for(let x=0;x<W;x++)vals[y*W+x]=texSample(t.key,(x/W)*L/R0,yy,yy/Hm,R0,prm);
+  }
+  const img=ctx.createImageData(W,H), sg=t.amp>=0?1:-1;
+  for(let y=0;y<H;y++)for(let x=0;x<W;x++){
+    const i=y*W+x, v=vals[i]*sg;
+    const vx=x>0?vals[i-1]*sg:v, vyy=y>0?vals[i-W]*sg:v;
+    const sh=clamp(0.62+(v-vx)*1.8+(v-vyy)*1.8+v*0.22,0.15,1.25);
+    img.data[i*4]=Math.min(255,197*sh);img.data[i*4+1]=Math.min(255,168*sh);
+    img.data[i*4+2]=Math.min(255,130*sh);img.data[i*4+3]=255;
+  }
+  ctx.putImageData(img,0,0);
+}
+function drawFormThumb(cv,f){
+  const W=cv.width,H=cv.height,ctx=cv.getContext('2d');
+  ctx.fillStyle='#1c1c1e';ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#c5a882';ctx.strokeStyle='#c5a882';
+  if(f.shape==='slab'){
+    // Flat tile: slanted slab with a relief face
+    ctx.fillStyle='#8a7558';
+    ctx.beginPath();ctx.moveTo(W*0.22,H*0.82);ctx.lineTo(W*0.78,H*0.82);ctx.lineTo(W*0.82,H*0.9);ctx.lineTo(W*0.18,H*0.9);ctx.closePath();ctx.fill();
+    ctx.fillStyle='#c5a882';ctx.fillRect(W*0.22,H*0.12,W*0.56,H*0.7);
+    ctx.strokeStyle='#9c8463';ctx.lineWidth=1;
+    for(let k=1;k<4;k++){ctx.beginPath();ctx.moveTo(W*0.26,H*(0.12+0.175*k));ctx.quadraticCurveTo(W*0.5,H*(0.06+0.175*k),W*0.74,H*(0.12+0.175*k));ctx.stroke();}
+    return;
+  }
+  if((f.arcSpan||360)<360){
+    // Tile: show the arc cross-section
+    const a=f.arcSpan*Math.PI/180;
+    const rr=Math.min(W*0.42,H*0.8), cx=W/2, cy=H*0.12+rr;
+    ctx.lineWidth=5;ctx.lineCap='round';
+    ctx.beginPath();ctx.arc(cx,cy,rr,-Math.PI/2-a/2,-Math.PI/2+a/2);ctx.stroke();
+    return;
+  }
+  const rFn=f.profile?(v=>catmullRomR(v,f.profile)):(v=>lerp(f.botR,f.topR,v));
+  let maxR=0;for(let k=0;k<=40;k++)maxR=Math.max(maxR,rFn(k/40));
+  const k=Math.min((W/2-3)/maxR,(H-4)/f.h), base=H-2, cx=W/2;
+  ctx.beginPath();
+  for(let i=0;i<=40;i++){const v=i/40;ctx.lineTo(cx-rFn(v)*k,base-v*f.h*k);}
+  for(let i=40;i>=0;i--){const v=i/40;ctx.lineTo(cx+rFn(v)*k,base-v*f.h*k);}
+  ctx.closePath();ctx.fill();
+  // mouth opening
+  const rt=rFn(1)*k, yt=base-f.h*k;
+  ctx.fillStyle='#5a4a38';
+  ctx.beginPath();ctx.ellipse(cx,yt,Math.max(1,rt-1.5),Math.max(1,rt*0.18),0,0,Math.PI*2);ctx.fill();
+}
+
+function drawCustomTexThumb(){
+  const cv=document.getElementById('ctThumb');if(!cv)return;
+  const ctx=cv.getContext('2d'),W=cv.width,H=cv.height;
+  if(!_ctPix){
+    ctx.fillStyle='#2c2c2e';ctx.fillRect(0,0,W,H);
+    ctx.strokeStyle='#8e8e93';ctx.setLineDash([3,3]);ctx.lineWidth=1;ctx.strokeRect(3.5,3.5,W-7,H-7);ctx.setLineDash([]);
+    ctx.fillStyle='#c7c7cc';ctx.font='20px system-ui';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('＋',W/2,H/2+1);
+    return;
+  }
+  const sub=document.getElementById('ctSub');if(sub)sub.textContent=_ctName||'已載入';
+  drawTexThumb(cv,{key:'custom',scale:Math.max(10,P.texType==='custom'?P.texScale:30),rough:0,angle:0,amp:1,inv:P.texInvert,stagger:P.texStagger});
+}
+function buildLexiconUI(){
+  const fg=document.getElementById('formGrid');
+  FORM_PRESETS.forEach(f=>{
+    const b=document.createElement('button');
+    b.className='lex-btn';b.dataset.form=f.key;b.title=f.name+'：'+f.sub;
+    const cv=document.createElement('canvas');cv.width=72;cv.height=46;
+    b.appendChild(cv);
+    b.insertAdjacentHTML('beforeend',`<span class="lx-name">${f.name}</span><span class="lx-sub">${f.sub}</span>`);
+    b.addEventListener('click',()=>applyForm(f));
+    fg.appendChild(b);
+    drawFormThumb(cv,f);
+  });
+  const tg=document.getElementById('texGrid');
+  TEX_PRESETS.forEach(t=>{
+    const b=document.createElement('button');
+    b.className='lex-btn';b.dataset.tex=t.key;b.title=t.name+'：'+t.sub;
+    const cv=document.createElement('canvas');cv.width=72;cv.height=40;
+    b.appendChild(cv);
+    b.insertAdjacentHTML('beforeend',`<span class="lx-name">${t.name}</span><span class="lx-sub">${t.sub}</span>`);
+    b.addEventListener('click',()=>applyTex(t));
+    tg.appendChild(b);
+    drawTexThumb(cv,t);
+  });
+  // Custom vector tile
+  {
+    const b=document.createElement('button');
+    b.className='lex-btn';b.dataset.tex='custom';b.title='上傳自己的 SVG／圖片作為表面紋理';
+    const cv=document.createElement('canvas');cv.width=72;cv.height=40;cv.id='ctThumb';
+    b.appendChild(cv);
+    b.insertAdjacentHTML('beforeend',`<span class="lx-name">自訂向量</span><span class="lx-sub" id="ctSub">＋ 上傳 SVG</span>`);
+    b.addEventListener('click',()=>{
+      if(!_ctPix)document.getElementById('ctFile').click();
+      else applyTex(CUSTOM_TEX);
+    });
+    tg.appendChild(b);
+    drawCustomTexThumb();
+  }
+  document.getElementById('ctFile').addEventListener('change',function(){
+    if(this.files[0])loadCustomTexFile(this.files[0]);
+    this.value='';
+  });
+  document.getElementById('ctReplaceBtn').addEventListener('click',()=>document.getElementById('ctFile').click());
+  document.getElementById('texInvert').addEventListener('change',function(){pushHistory();P.texInvert=this.checked;drawCustomTexThumb();schedRegen();});
+  document.getElementById('texStagger').addEventListener('change',function(){pushHistory();P.texStagger=this.checked;drawCustomTexThumb();schedRegen();});
+  document.getElementById('texRerollBtn').addEventListener('click',()=>{
+    pushHistory();P.texSeed=Math.floor(Math.random()*999)+1;syncLexUI();schedRegen();
+  });
+  document.getElementById('texClearBtn').addEventListener('click',()=>{
+    pushHistory();P.texType='none';syncLexUI();schedRegen();
+  });
+  syncLexUI();
+}
+
+// ══════════════════════════════════
+// INIT
+// ══════════════════════════════════
+buildLexiconUI();
+rebuildBumpCenters(); // pre-generate random bump positions
+upload();
+render();
+// Seed undo history with the initial state (so first undo doesn't go below index 0)
+setTimeout(()=>{ pushHistory(); }, 100);
+</script>
+<script>
+(function(){
+  function pct(el){var mn=+el.min||0,mx=+el.max||100,v=+el.value;el.style.setProperty('--pct',((v-mn)/((mx-mn)||1)*100)+'%');}
+  function all(){document.querySelectorAll('input[type=range]').forEach(pct);}
+  document.addEventListener('input',function(e){if(e.target.type==='range')pct(e.target);},true);
+  document.addEventListener('click',function(){setTimeout(all,0);},true);
+  document.addEventListener('change',function(){setTimeout(all,0);},true);
+  document.addEventListener('keyup',function(){setTimeout(all,0);},true);
+  all();setInterval(all,500);
+})();
+</script>
+</body>
+</html>
