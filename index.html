@@ -179,6 +179,7 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:4px;}
     <div class="sec">
       <div class="sec-title">紋理語彙 · 現成表面紋理</div>
       <div class="lex-grid" id="texGrid"></div>
+      <div class="lex-note" style="margin:-4px 0 6px;">再點一次已選的紋理即可取消</div>
       <div id="tex-opts" style="display:none;padding-top:8px;border-top:1px solid #38383a;">
         <div class="srow"><span class="slabel">紋理深度</span><input type="range" id="texAmp" min="-10" max="10" value="1.5" step="0.1"><span class="sval" id="v-texAmp">+1.5 mm</span></div>
         <div style="font-size:11px;color:#a1a1a6;margin-top:-3px;margin-bottom:5px;">正值＝浮雕凸起 &nbsp;·&nbsp; 負值＝刻印凹入</div>
@@ -285,7 +286,8 @@ input[type=color]::-webkit-color-swatch{border:0;border-radius:4px;}
     <div class="sec">
       <div class="sec-title">主螺旋</div>
       <div class="srow"><span class="slabel">螺旋條數</span><input type="range" id="numRibs" min="0" max="24" value="12" step="1"><span class="sval" id="v-numRibs">12 條</span></div>
-      <div class="srow"><span class="slabel">旋轉幅度</span><input type="range" id="twist" min="0" max="720" value="540" step="15"><span class="sval" id="v-twist">540°</span></div>
+      <div class="srow"><span class="slabel">旋轉幅度</span><input type="range" id="twist" min="0" max="1080" value="90" step="5"><span class="sval" id="v-twist">90°</span></div>
+      <div id="twist-hint" style="font-size:11px;color:#a1a1a6;margin-top:-3px;margin-bottom:5px;line-height:1.5;"></div>
       <div class="srow"><span class="slabel">凹凸深度</span><input type="range" id="ribH" min="-20" max="20" value="3" step="0.5"><span class="sval" id="v-ribH">+3.0 mm</span></div>
       <div style="font-size:11px;color:#a1a1a6;margin-top:-3px;margin-bottom:5px;">正值＝凸起 &nbsp;·&nbsp; 負值＝凹槽</div>
       <div class="srow"><span class="slabel">突起寬度</span><input type="range" id="ribS" min="1" max="12" value="2" step="0.5"><span class="sval" id="v-ribS">2</span></div>
@@ -624,7 +626,7 @@ function mul4(a,b){
 const DEF = {
   shape:'cone', topR:45, botR:5, h:120, coneAngle:18,
   hollow:false, wallT:3, sealBot:false,
-  numRibs:12, twist:540, ribH:3, ribS:2, cw:true,
+  numRibs:12, twist:90, ribH:3, ribS:2, cw:true,
   rib2:false, rib2H:1.5, rib2Len:50, rib2FromTop:false,
   numVert:0, vertH:2.0, vertS:2,
   numHoriz:0, horizH:2.0, horizS:2,
@@ -738,7 +740,7 @@ function ribDisp(theta,v){
   const{numRibs,twist,ribH,ribS,cw,ribProfile}=P;
   if(numRibs===0||ribH===0)return 0;
   const dir=cw?-1:1;
-  const phase=numRibs*theta+dir*(twist/360)*2*Math.PI*v;
+  const phase=numRibs*theta+dir*numRibs*(twist/360)*2*Math.PI*v;
   if(ribProfile===1){
     // Sharp tent wave: linear falloff from rib centre → V-ridge profile
     const n=((phase%(2*Math.PI))+2*Math.PI)%(2*Math.PI);
@@ -756,7 +758,7 @@ function rib2Disp(theta,v){
   const fadeZone=Math.min(0.08,span*0.25);
   const fade=vLocal<span-fadeZone?1:Math.max(0,(span-vLocal)/fadeZone);
   const dir=cw?-1:1;
-  const phase=numRibs*theta+dir*(twist/360)*2*Math.PI*v+Math.PI;
+  const phase=numRibs*theta+dir*numRibs*(twist/360)*2*Math.PI*v+Math.PI;
   return rib2H*Math.pow((1+Math.cos(phase))/2,ribS)*fade;
 }
 // Cross-section lobes: modulate radius azimuthally → star / polygon cross-section
@@ -1104,9 +1106,17 @@ function updateTexRef(){
   else{let sum=0;for(let k=0;k<=20;k++)sum+=Math.max(2,getR(k/20));texRefR=sum/21;}
   texPrm={s:P.texScale,r:P.texRough,a:P.texAngle*Math.PI/180,seed:P.texSeed,inv:P.texInvert,stagger:P.texStagger};
 }
+// 旋轉幅度 also twists the texture lexicon, flowing with the main spiral:
+// with ribs it follows their actual rotation (twist ÷ rib count); with no ribs the texture
+// itself rotates by the full 旋轉幅度 from bottom to top.
+function texTwistRad(){
+  const dir=P.cw?-1:1;
+  return dir*(P.twist*Math.PI/180);
+}
 function texDisp(theta,v){
   if(!P.texType||P.texType==='none'||!P.texAmp)return 0;
-  return P.texAmp*texSample(P.texType,theta,v*P.h,v,texRefR,texPrm);
+  const th=theta-texTwistRad()*v;
+  return P.texAmp*texSample(P.texType,th,v*P.h,v,texRefR,texPrm);
 }
 
 // ── Custom vector texture (自訂向量紋理) ──
@@ -1811,7 +1821,19 @@ function render(){
 // ══════════════════════════════════
 // HUD
 // ══════════════════════════════════
+function updateTwistHint(){
+  const el=document.getElementById('twist-hint');if(!el)return;
+  const hasTex=P.texType&&P.texType!=='none'&&P.texAmp;
+  const ribsOn=P.numRibs>0&&P.ribH!==0;
+  let msg;
+  if(!ribsOn&&!hasTex) msg='⚠ 目前螺旋條數為 0、也沒有套用紋理，旋轉幅度不會有效果。請增加螺旋條數或套用紋理語彙。';
+  else if(!ribsOn) msg=`螺旋條數為 0：旋轉幅度直接扭轉紋理，由下到上旋轉 ${P.twist}°`;
+  else msg=`每條螺旋由下到上繞 ${P.twist}°${P.twist>=360?'（≈'+(P.twist/360).toFixed(1)+' 圈）':''}${hasTex?'，紋理同步扭轉':''}`;
+  el.textContent=msg;
+  el.style.color=(!ribsOn&&!hasTex)?'#f4a261':'#a1a1a6';
+}
 function updateHUD(){
+  updateTwistHint();
   const{topR,botR,h,hollow,wallT,numRibs,twist}=P;
   const sw=document.getElementById('slabW-row');if(sw)sw.style.display=isSlab()?'flex':'none';
   if(isSlab()){
@@ -1844,20 +1866,38 @@ function hexRGB(h){return[parseInt(h.slice(1,3),16)/255,parseInt(h.slice(3,5),16
 const MAX_HIST=50;
 const hist=[];
 let histIdx=-1;
+// hist holds saved states; histIdx = the state currently shown.
+// After an edit, the live state isn't stored yet (atTip) — it's captured on the first undo,
+// so each undo steps back exactly one change and redo can return to it.
+let atTip=false;
 
 function cloneState(){
   return{...P,baseCol:[...P.baseCol],profilePts:P.profilePts.map(pt=>({...pt})),envPts:P.envPts.map(pt=>({...pt}))};
 }
+function sameState(a,b){return !!a&&!!b&&JSON.stringify(a)===JSON.stringify(b);}
 function pushHistory(){
-  hist.splice(histIdx+1); // discard any forward history
-  hist.push(cloneState());
-  if(hist.length>MAX_HIST){hist.shift();}
+  // called just BEFORE a change: store the pre-change state
+  if(!atTip)hist.splice(histIdx+1);           // discard forward history
+  const st=cloneState();
+  if(!sameState(hist[hist.length-1],st)){
+    hist.push(st);
+    if(hist.length>MAX_HIST)hist.shift();
+  }
   histIdx=hist.length-1;
+  atTip=true;
   refreshUndoBtns();
 }
+function captureTip(){
+  if(!atTip)return;
+  const st=cloneState();
+  if(!sameState(hist[hist.length-1],st)){hist.push(st);if(hist.length>MAX_HIST)hist.shift();}
+  histIdx=hist.length-1;
+  atTip=false;
+}
 function refreshUndoBtns(){
-  document.getElementById('undoBtn').disabled=(histIdx<=0);
-  document.getElementById('redoBtn').disabled=(histIdx>=hist.length-1);
+  const liveDiffers=atTip&&!sameState(hist[hist.length-1],cloneState());
+  document.getElementById('undoBtn').disabled=!(histIdx>0||liveDiffers);
+  document.getElementById('redoBtn').disabled=atTip||(histIdx>=hist.length-1);
 }
 function applySnap(snap){
   Object.assign(P,snap,{baseCol:[...snap.baseCol],profilePts:snap.profilePts.map(pt=>({...pt})),envPts:(snap.envPts||DEF_ENV).map(pt=>({...pt}))});
@@ -1865,12 +1905,13 @@ function applySnap(snap){
   refreshUndoBtns();
 }
 document.getElementById('undoBtn').addEventListener('click',()=>{
-  if(histIdx<=0)return;
+  captureTip();
+  if(histIdx<=0){refreshUndoBtns();return;}
   histIdx--;
   applySnap(hist[histIdx]);
 });
 document.getElementById('redoBtn').addEventListener('click',()=>{
-  if(histIdx>=hist.length-1)return;
+  if(atTip||histIdx>=hist.length-1)return;
   histIdx++;
   applySnap(hist[histIdx]);
 });
@@ -2572,6 +2613,7 @@ document.getElementById('saveBtn').addEventListener('click',()=>{
   setTimeout(()=>{
     const snap={
       _version:1,
+      _twistMode:2,
       _saved:now.toISOString(),
       _shape_label:{cone:'直錐',vcone:'弧錐',cylinder:'直筒',bowl:'碗形',belly:'自訂輪廓',custom:'自訂輪廓'}[P.shape]||P.shape,
       ...P,
@@ -2738,6 +2780,7 @@ document.getElementById('loadFile').addEventListener('change',function(){
         'arcSpan','slabW','texInvert','texStagger','texType','texAmp','texScale','texRough','texAngle','texSeed',
         'mode','gradAmt','lightA','lightI'];
       keys.forEach(k=>{if(q[k]!==undefined)P[k]=q[k];});
+      if(!q._twistMode&&q.twist!==undefined&&q.numRibs>0)P.twist=Math.round(q.twist/q.numRibs); // old files: twist was phase, now real rotation
       if(q._customTex)setCustomTexFromURL(q._customTex,q._customTexName||'',false);
       if(q.baseCol&&q.baseCol.length===3)P.baseCol=[...q.baseCol];
       // Restore profile points for custom/belly shapes
@@ -3304,6 +3347,7 @@ function applyForm(f){
   const col=[...P.baseCol];
   Object.assign(P,DEF,kept,{baseCol:col,envPts:cloneEnv(DEF_ENV)});
   P.numRibs=0;            // start from a plain wall
+  P.twist=0;              // …and an untwisted texture; 旋轉幅度 then twists the texture
   P.hollow=true;
   P.h=f.h; P.wallT=f.wallT; P.sealBot=f.sealBot; P.arcSpan=f.arcSpan||360;
   if(f.profile){
@@ -3322,6 +3366,8 @@ function applyForm(f){
 }
 function applyTex(t){
   pushHistory();
+  // Click the active tile again → turn the texture off
+  if(P.texType===t.key){P.texType='none';syncLexUI();schedRegen();return;}
   P.texType=t.key;
   P.texAmp=t.amp; P.texScale=t.scale; P.texRough=t.rough; P.texAngle=t.angle;
   if(t.key==='custom')rasterCustomTex();
